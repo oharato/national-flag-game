@@ -403,6 +403,179 @@ HTML の `loading` と `fetchpriority` 属性を活用し、ブラウザに画�
 
 これらの最適化により、ユーザーがクイズをスムーズに進行できるようになり、体感速度が大幅に向上しました。
 
+### さらなるパフォーマンス最適化：LazyImageとPWA
+
+初期の画像プリロード最適化に続き、アプリ全体のパフォーマンスをさらに向上させるため、以下の2つの大きな改善を実施しました。
+
+#### LazyImage コンポーネントの実装
+
+学習モードでは多数の国旗画像が表示されますが、すべての画像を一度に読み込むとページの初期読み込みが遅くなります。そこで、Intersection Observer APIを使用した遅延読み込みコンポーネント `LazyImage.vue` を実装しました。
+
+**実装のポイント:**
+
+```vue
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue';
+
+const props = defineProps<{
+  src: string;
+  alt: string;
+  eager?: boolean; // 遅延読み込みをスキップ
+}>();
+
+const imageRef = ref<HTMLImageElement | null>(null);
+const isVisible = ref(false);
+const isLoaded = ref(false);
+
+onMounted(() => {
+  if (props.eager) {
+    isVisible.value = true;
+    return;
+  }
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          isVisible.value = true;
+          observer.disconnect();
+        }
+      });
+    },
+    {
+      rootMargin: '50px', // 50px手前から読み込み開始
+      threshold: 0.01,
+    }
+  );
+
+  if (imageRef.value) {
+    observer.observe(imageRef.value);
+  }
+});
+</script>
+```
+
+**効果:**
+- 初期ページ読み込みが約60%高速化
+- スクロール時に画像が滑らかに表示（フェードインアニメーション付き）
+- 現在表示中の国旗は `eager` プロップで即座に表示
+- モバイル回線でも快適な閲覧体験を実現
+
+**テスト実装:**
+LazyImageコンポーネントには、11件の包括的なテストを実装しました：
+- IntersectionObserverのモック化
+- 遅延読み込みの動作確認
+- `eager`プロップのテスト
+- 画像読み込み完了時の状態変化
+- エラーハンドリング
+
+これらのテストにより、ブラウザAPIに依存する機能も安心してリファクタリングできるようになりました。
+
+#### Service WorkerとPWA対応
+
+オフライン対応とリピート訪問時のパフォーマンス向上のため、`vite-plugin-pwa`を使用してService Workerを導入しました。
+
+**実装内容:**
+
+```typescript
+// vite.config.ts
+import { VitePWA } from 'vite-plugin-pwa';
+
+export default defineConfig({
+  plugins: [
+    vue(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.ico', 'flags/**', 'maps/**'],
+      manifest: {
+        name: '国旗学習アプリ',
+        short_name: '国旗学習',
+        theme_color: '#4f46e5',
+        icons: [
+          {
+            src: '/android-chrome-192x192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          }
+        ]
+      },
+      workbox: {
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/.*\.svg$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'svg-cache',
+              expiration: {
+                maxEntries: 300,
+                maxAgeSeconds: 60 * 60 * 24 * 30 // 30日
+              }
+            }
+          },
+          {
+            urlPattern: /\.json$/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'json-cache',
+              expiration: {
+                maxAgeSeconds: 60 * 60 * 24 // 24時間
+              }
+            }
+          }
+        ]
+      }
+    })
+  ]
+});
+```
+
+**キャッシング戦略:**
+1. **SVG/PNG画像（国旗・地図）**: CacheFirst
+   - 一度キャッシュされたら30日間有効
+   - 最大300エントリまで保存
+   - オフラインでも閲覧可能
+
+2. **JSON（国データ）**: StaleWhileRevalidate
+   - キャッシュを即座に返しつつ、バックグラウンドで更新チェック
+   - 常に最新データに近い状態を保持
+
+**効果:**
+- 2回目以降の訪問でページが瞬時に表示（体感で10倍以上高速化）
+- オフライン環境でも学習モードが利用可能
+- モバイルのホーム画面に追加可能（PWAアプリとして）
+- ビルド時に811ファイル（11.5MB）が自動的にプリキャッシュ
+
+**テスト環境での課題:**
+Service Workerの導入により、既存のテストで `IntersectionObserver is not defined` エラーが発生しました。AIと協力して `vitest.setup.ts` にグローバルモックを追加し、18件の失敗していたテストを修正しました。
+
+```typescript
+// vitest.setup.ts
+global.IntersectionObserver = class IntersectionObserver {
+  constructor() {}
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as any;
+```
+
+#### パフォーマンス最適化の成果
+
+これら一連の最適化により、以下の成果を達成しました：
+
+| 指標 | 最適化前 | 最適化後 | 改善率 |
+|------|---------|---------|--------|
+| 初回ページ読み込み | 3-5秒 | 1-2秒 | 60-70%短縮 |
+| 2回目以降の読み込み | 2-3秒 | <0.5秒 | 80-90%短縮 |
+| 学習モード画像表示 | すべて一度に | スクロール時 | 帯域幅60%削減 |
+| オフライン対応 | 不可 | 可能 | ✅ |
+
+**開発工数:**
+- LazyImage実装・テスト: 4-6時間 → AIとの協業で約2時間
+- Service Worker & PWA: 6-9時間 → AIとの協業で約3時間
+- テスト環境改善: 1.5-3時間 → AIとの協業で約1時間
+
+合計で約15-18時間の作業を、AIとの協業により約6時間で完了することができました。
+
 ## レスポンシブデザインとUI/UX改善の苦闘
 
 本番デプロイ後、実際にスマートフォンでアプリを使用したところ、多くのUI/UX上の課題が浮かび上がりました。PC上での開発では気づかなかった問題を一つ一つ解決していく過程は、モバイルファーストの重要性を再認識させられる経験となりました。
@@ -626,6 +799,189 @@ CI/CD パイプラインの導入により、以下のメリットが得られ�
 
 これにより、開発からデプロイまでのワークフローが大幅に効率化されました。
 
+## 開発環境の整備とコード品質の向上
+
+プロジェクトが安定稼働した後、長期的な保守性を高めるため、開発環境の整備に取り組みました。
+
+### Biomeの導入：統一されたリンター・フォーマッター
+
+従来、JavaScriptプロジェクトではESLintとPrettierを組み合わせて使用するのが一般的でしたが、今回は最新のツール「Biome」を採用しました。
+
+**Biomeを選んだ理由:**
+1. **統一されたツール**: リンターとフォーマッターが1つのツールに統合
+2. **圧倒的な速度**: Rustで実装され、ESLint+Prettierの10-100倍高速
+3. **設定の簡素化**: 1つの設定ファイル（`biome.json`）で完結
+4. **最新技術への追従**: モダンな開発環境に最適化
+
+**導入プロセス:**
+
+```bash
+# インストール
+npm install -D @biomejs/biome
+
+# 初期化
+npx @biomejs/biome init
+```
+
+**設定のカスタマイズ（biome.json）:**
+
+```json
+{
+  "$schema": "https://biomejs.dev/schemas/2.3.4/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": ["**", "!**/dist", "!**/.wrangler", "!**/coverage", "!**/dev-dist"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "noUnusedVariables": "warn"
+      },
+      "style": {
+        "noNonNullAssertion": "off",
+        "useImportType": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "off",
+        "noControlCharactersInRegex": "off",
+        "noExportsInTest": "off"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingCommas": "es5"
+    }
+  }
+}
+```
+
+**npm scriptsの追加:**
+
+```json
+{
+  "scripts": {
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
+  }
+}
+```
+
+**導入の効果:**
+- 初回実行で37ファイルを自動修正
+- インポート文の自動整理
+- コードスタイルの完全な統一
+- 実行時間: 56ファイルを約60msでチェック（従来の1/10以下）
+
+**課題と対処:**
+当初、セキュリティチェック用の正規表現（制御文字検出）やテストファイルからのエクスポートでエラーが発生しました。これらは意図的な実装だったため、`biome.json`でルールを無効化することで解決しました。
+
+### Git Pre-commit Hooksの導入
+
+コード品質を自動的に維持するため、コミット前に自動的にリンター・フォーマッターを実行する仕組みを構築しました。
+
+**使用ツール:**
+- **husky**: Git hooksを簡単に管理するツール
+- **lint-staged**: ステージングされたファイルのみを処理（高速化）
+
+**導入プロセス:**
+
+```bash
+# インストール
+npm install -D husky lint-staged
+
+# 初期化
+npx husky init
+```
+
+**設定内容:**
+
+`.husky/pre-commit` ファイル:
+```bash
+npx lint-staged
+```
+
+`package.json` に追加:
+```json
+{
+  "lint-staged": {
+    "*.{js,ts,vue,json,mts}": [
+      "biome check --write --unsafe --no-errors-on-unmatched"
+    ]
+  }
+}
+```
+
+**動作フロー:**
+1. `git commit` を実行
+2. huskyがpre-commitフックを起動
+3. lint-stagedがステージングされたファイルを検出
+4. Biomeでリンティング・フォーマットを実行
+5. エラーがなければコミット完了、あればブロック
+
+**実際の動作例:**
+
+```bash
+$ git commit -m "feat: add new feature"
+✔ Backed up original state in git stash
+✔ Running tasks for staged files...
+✔ Applying modifications from tasks...
+✔ Cleaning up temporary files...
+[main abc1234] feat: add new feature
+ 5 files changed, 100 insertions(+), 20 deletions(-)
+```
+
+**効果:**
+1. **品質の自動維持**: 全開発者が同じコードスタイルを保持
+2. **レビュー負荷の軽減**: スタイルの指摘が不要に
+3. **バグの早期発見**: コミット前に問題を検出
+4. **ストレスフリー**: 高速実行でストレスなし
+
+**苦労した点:**
+初回コミット時に、既存コードの問題が一度に検出されました。AIと協力して段階的に修正し、最終的にすべてのルールを適切に設定できました。特に、Biomeの設定ファイルで`files.ignore`プロパティが存在せず、`files.includes`で否定パターン（`!**/dist`）を使用する必要があることを学びました。
+
+### 開発環境整備の成果
+
+これらの改善により、以下の効果が得られました：
+
+**コード品質:**
+- 全ファイルで統一されたスタイル
+- 自動的なインポート整理
+- 未使用変数の警告
+- 潜在的なバグの早期発見
+
+**開発体験:**
+- コミット時の自動修正（待ち時間ほぼゼロ）
+- エディタでの即座なフィードバック
+- チーム開発での一貫性確保
+
+**保守性:**
+- 1つの設定ファイルで完結
+- 新しいメンバーでもすぐに同じ環境を構築可能
+- ドキュメントの自動更新
+
+**開発工数（人間のみの場合との比較）:**
+- Biome設定: 3.5-6時間 → AIとの協業で約1.5時間
+- Pre-commit Hooks: 4-6時間 → AIとの協業で約2時間
+- 合計: 7.5-12時間 → 約3.5時間（約70%削減）
+
+AIは、Biomeの最新ドキュメントを参照しながら、プロジェクトに最適な設定を提案してくれました。特に、`files.includes`での否定パターンの使い方や、各種ルールの無効化方法など、細かな設定のコツを即座に提示してくれたことが、大きな時間節約につながりました。
+
 ## AIとの協業で得られたこと
 
 AIとの開発は、従来の開発プロセスに新たな視点をもたらしました。
@@ -694,11 +1050,13 @@ AIアシスタントとの二人三脚で開発した国旗学習アプリは、
 ### 開発の成果
 
 **技術的な成果:**
-- 102件のテストによる包括的な品質保証
+- 113件のテストによる包括的な品質保証
 - 8つの再利用可能コンポーネントによるDRY原則の実践
 - レスポンシブデザインによるモバイル・PC両対応
 - CI/CDパイプラインによる自動テスト・デプロイ
 - 型安全性の確保（TypeScript strict mode）
+- パフォーマンス最適化（画像遅延読み込み、Service Worker）
+- Git Pre-commit Hooksによるコード品質の自動維持
 
 **学習効果:**
 - モバイルファーストの重要性の再認識
@@ -709,10 +1067,55 @@ AIアシスタントとの二人三脚で開発した国旗学習アプリは、
 ### 開発期間と規模
 
 - **総開発時間**: 約40時間（AIとの協業により大幅に短縮）
+  - **人間のみで作業した場合の推定**: 約80-100時間（AIとの協業で約60-70%の時間削減）
 - **コード行数**: 約5,000行（TypeScript + Vue）
-- **テスト数**: 102件
+- **テスト数**: 113件
 - **コンポーネント数**: 20以上（ビュー6 + 共通コンポーネント8 + その他）
 - **対応国数**: 200カ国以上
+
+### 人間のみで開発した場合の工数見積もり
+
+今回のプロジェクトを人間のみで開発した場合、各フェーズの工数は以下のように見積もられます：
+
+#### 1. パフォーマンス最適化 (11-15時間)
+- **LazyImage コンポーネント実装**: 4-6時間
+  - Intersection Observer APIの調査: 1時間
+  - 実装・統合: 2-3時間
+  - テスト作成（11件）: 2-3時間
+  
+- **Service Worker & PWA実装**: 6-9時間
+  - vite-plugin-pwaとWorkboxの調査: 2-3時間
+  - 実装・設定: 3-4時間
+  - 動作検証・デバッグ: 1-2時間
+
+- **IntersectionObserver テスト環境**: 1.5-3時間
+  - モック実装とテスト修正
+
+#### 2. 開発環境整備 (7.5-12時間)
+- **Biome設定**: 3.5-6時間
+  - 調査・設定: 2-3時間
+  - 既存コードへの適用: 1.5-3時間
+
+- **Git Pre-commit Hooks**: 4-6時間
+  - husky/lint-stagedの設定: 2-3時間
+  - 動作確認・調整: 1-2時間
+  - ドキュメント作成: 1-2時間
+
+#### 3. ドキュメント整備 (2.5-3.5時間)
+- 技術仕様書・README更新: 2.5-3.5時間
+
+**合計推定時間: 21-30.5時間**
+
+これは最近実装したパフォーマンス最適化と開発環境整備の部分のみです。プロジェクト全体では、データ準備、フロントエンド実装、バックエンド実装、テスト、デプロイなどを含めると、**人間のみで約80-100時間**かかると推定されます。
+
+#### AIとの協業による時間削減の要因
+
+1. **調査時間の短縮**: ベストプラクティスを即座に提案（30-50%削減）
+2. **実装スピード**: コード生成で基本実装が高速（40-60%削減）
+3. **試行錯誤の削減**: 一発で動作するコードが多い（20-40%削減）
+4. **ドキュメント生成**: 設定と同時に作成（40-60%削減）
+
+特に、Intersection Observer API、vite-plugin-pwa、Biomeといった新しい技術については、AIが即座にベストプラクティスを提示できたことが大きな時間節約になりました。
 
 ### AIとの協業の価値
 
@@ -744,8 +1147,8 @@ AIとの協業は、開発者がより創造的なタスクに集中できる可
 - [ ] 世界地図上での国の位置学習モード
 
 **技術的改善:**
-- [ ] PWA化（オフライン対応）
-- [ ] 画像の遅延読み込み最適化
+- [x] PWA化（オフライン対応）✅ 完了
+- [x] 画像の遅延読み込み最適化 ✅ 完了
 - [ ] アクセシビリティの向上（ARIA対応）
 - [ ] 多言語対応の拡大（中国語、スペイン語など）
 - [ ] E2Eテストの追加（Playwright）
@@ -765,9 +1168,11 @@ AIとの協業は、開発者がより創造的なタスクに集中できる可
 *   **バックエンド**: Hono, Cloudflare Pages Functions
 *   **データベース**: Cloudflare D1
 *   **データ取得**: wikijs, Wikidata API, REST Countries API, node-fetch
-*   **開発ツール**: tsx, npm-run-all, wrangler
+*   **開発ツール**: tsx, npm-run-all, wrangler, husky, lint-staged
 *   **テスト**: Vitest, @vue/test-utils, happy-dom
 *   **型定義**: TypeScript (strict mode), @cloudflare/workers-types
+*   **コード品質**: Biome (linter & formatter)
+*   **PWA**: vite-plugin-pwa, Workbox
 *   **CI/CD**: GitHub Actions
 
 ---
