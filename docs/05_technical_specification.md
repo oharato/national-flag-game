@@ -89,7 +89,7 @@
     | `format` | TEXT | クイズ形式: 'flag-to-name' (国旗→国名), 'name-to-flag' (国名→国旗) |
     | `date` | TEXT | 日付 (YYYY-MM-DD形式) |
     | `created_at` | TEXT | 登録日時 (ISO 8601形式) |
-    | UNIQUE制約 | - | (nickname, region, format, date) - 同じユーザーは1日1地域1形式につき1回のみ記録（最高スコアで更新） |
+    | 備考 | - | 各挑戦ごとに記録される（UNIQUE制約なし） |
 
     **ranking_all_time テーブル** (全期間ランキング - 上位5位のみ保持)
     | カラム名 | 型 | 説明 |
@@ -155,6 +155,18 @@
    - 国名、首都、大陸、地図、説明の表示
    - スクロール可能な説明文エリア
 
+#### 学習モード (Study.vue)
+*   **機能**:
+    *   クイズ形式選択: 国旗→国名 / 国名→国旗
+    *   地域別フィルタリング
+    *   フラッシュカード形式での学習（クリックで裏返し）
+    *   キーボード操作対応（矢印キー: 前後、スペース: 裏返し）
+    *   国一覧表示: クイズ形式に応じて国旗または国名を表示
+*   **UI最適化**:
+    *   国旗→国名モード: 小さい正方形の国旗グリッド（5-10列）
+    *   国名→国旗モード: 読みやすい幅の国名グリッド（2-5列）
+    *   選択項目の強調表示（ボーダーサイズ固定でレイアウトシフト防止）
+
 #### パフォーマンス最適化
 *   **画像プリロード**: 次の問題の画像を事前に読み込み、スムーズな問題移行を実現
 *   **画像優先読み込み**: `loading="eager"` と `fetchpriority="high"` 属性で即座に読み込み
@@ -189,10 +201,10 @@
 ### 3.4. マイグレーション管理
 *   **ツール**: Wrangler CLI
 *   **マイグレーションファイル**: `migrations/` ディレクトリに配置
-    *   `0000_create_ranking_table.sql`: 初期テーブル作成
-    *   `0001_create_regional_ranking_tables.sql`: 地域別ランキングテーブル追加
-    *   `0002_add_format_to_ranking_tables.sql`: クイズ形式列を追加
+    *   `0000_initial_schema.sql`: 初期テーブル作成
+    *   `0001_remove_unique_constraint.sql`: UNIQUE制約削除（各挑戦ごとに記録できるように変更）
 *   **適用コマンド**: 
     *   ローカル: `npx wrangler d1 migrations apply national-flag-game-db --local`
     *   本番: `npx wrangler d1 migrations apply national-flag-game-db --remote`
+*   **自動適用**: GitHub Actionsのデプロイワークフローで本番環境へのマイグレーションが自動実行される
 ```

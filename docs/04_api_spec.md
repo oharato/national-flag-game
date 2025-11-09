@@ -61,7 +61,7 @@
 
 ### 2.2. スコア登録 `POST /ranking`
 
-新しいスコアをランキングに登録します。
+新しいスコアをランキングに登録します。同じユーザー・地域・形式の組み合わせでも、各挑戦ごとに記録されます。
 
 *   **メソッド**: `POST`
 *   **エンドポイント**: `/api/ranking`
@@ -73,13 +73,17 @@
     ```json
     {
       "nickname": "NewPlayer",
-      "score": 7700
+      "score": 7700,
+      "region": "Asia",
+      "format": "flag-to-name"
     }
     ```
     | キー | 型 | 必須 | 説明 |
     | :--- | :--- | :--- | :--- |
-    | `nickname` | string | はい | ユーザーのニックネーム。1文字以上15文字以下。 |
+    | `nickname` | string | はい | ユーザーのニックネーム。1文字以上20文字以下。 |
     | `score` | number | はい | クイズで算出されたスコア。 |
+    | `region` | string | いいえ | 出題地域。デフォルト: 'all' |
+    | `format` | string | いいえ | クイズ形式 ('flag-to-name' または 'name-to-flag')。デフォルト: 'flag-to-name' |
 
 
 #### レスポンス

@@ -79,7 +79,7 @@ watch([selectedRegion, selectedType, selectedFormat], () => {
             <tr>
               <th class="py-3 px-6 text-left text-lg font-medium text-gray-600">{{ t.ranking.rank }}</th>
               <th class="py-3 px-6 text-left text-lg font-medium text-gray-600">{{ t.ranking.nicknameLabel }}</th>
-              <th class="py-3 px-6 text-left text-lg font-medium text-gray-600">{{ t.ranking.scoreLabel }}</th>
+              <th class="py-3 px-6 text-right text-lg font-medium text-gray-600">{{ t.ranking.scoreLabel }}</th>
               <th class="py-3 px-6 text-left text-lg font-medium text-gray-600">{{ t.ranking.registeredAt }}</th>
             </tr>
           </thead>
@@ -97,7 +97,7 @@ watch([selectedRegion, selectedType, selectedFormat], () => {
                 <span v-else class="pl-2">{{ item.rank }}</span>
               </td>
               <td class="py-4 px-6 text-lg">{{ item.nickname }}</td>
-              <td class="py-4 px-6 text-lg font-semibold">{{ item.score }} pt</td>
+              <td class="py-4 px-6 text-lg font-semibold text-right">{{ item.score }} pt</td>
               <td class="py-4 px-6 text-sm text-gray-600">{{ formatDateTime(item.created_at) }}</td>
             </tr>
           </tbody>
@@ -122,7 +122,7 @@ watch([selectedRegion, selectedType, selectedFormat], () => {
               </span>
               <span class="text-lg font-semibold">{{ item.nickname }}</span>
             </div>
-            <span class="text-xl font-bold text-indigo-600">{{ item.score }}</span>
+            <span class="text-xl font-bold text-indigo-600 ml-2">{{ item.score }} pt</span>
           </div>
           <div class="text-xs text-gray-500">
             {{ formatDateTime(item.created_at) }}

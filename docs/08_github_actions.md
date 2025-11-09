@@ -198,6 +198,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Apply D1 Migrations
+        run: npx wrangler d1 migrations apply national-flag-game-db --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Deploy to Cloudflare Pages
         run: npx wrangler pages deploy dist --project-name=national-flag-game
         env:
@@ -207,6 +213,7 @@ jobs:
 
 **注**: 
 - `needs: test` により、testジョブが成功した場合のみdeployジョブが実行されます
+- ビルド後、デプロイ前に自動的にD1データベースのマイグレーションが実行されます
 - 最新の `wrangler pages deploy` コマンドを直接使用しており、非推奨の `wrangler pages publish` は使用していません
 
 ### 5. 動作確認
@@ -259,6 +266,23 @@ git push origin feature/new-feature
 ### エラー: "Account ID is invalid"
 - `CLOUDFLARE_ACCOUNT_ID` が正しく設定されているか確認
 - Account ID が正確にコピーされているか確認
+- wrangler whoami コマンドで表示されるAccount IDと一致しているか確認
+
+#### Account IDの確認と更新方法
+
+```bash
+# 現在のアカウント情報を確認
+npx wrangler whoami
+
+# GitHub Secretsを更新（gh CLIを使用）
+gh secret set CLOUDFLARE_ACCOUNT_ID --body "your-account-id-here"
+```
+
+### エラー: "Database migration failed"
+- マイグレーションファイルに構文エラーがないか確認
+- ローカルで `npx wrangler d1 migrations apply national-flag-game-db --local` が成功するか確認
+- D1データベースへのアクセス権限がAPIトークンに付与されているか確認
+  - Cloudflare ダッシュボードでAPIトークンの権限に「D1: Edit」が含まれているか確認
 
 ### エラー: "Project not found"
 - `projectName: national-flag-game` がワークフローファイルに正しく設定されているか確認
@@ -305,8 +329,9 @@ npm run deploy
 1. プルリクエストがマージされる
 2. GitHub Actions がテストを実行
 3. テストが成功した場合のみビルドを実行
-4. Cloudflare Pages に自動デプロイ
-5. 本番環境が更新される
+4. D1データベースのマイグレーションを自動実行（スキーマ変更を本番環境に適用）
+5. Cloudflare Pages に自動デプロイ
+6. 本番環境が更新される
 
 これにより、以下が実現されます:
 - **品質保証**: mainブランチに問題のあるコードがマージされるのを防ぐ

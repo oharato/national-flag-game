@@ -198,7 +198,7 @@ const goToCountry = (index: number) => {
       </div>
 
       <div class="w-full max-w-2xl mx-auto px-4 flex-shrink-0">
-        <div class="flex justify-between items-center mb-4">
+        <div class="flex justify-between items-center mb-4 mt-4">
           <button @click="prevCountry" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
             {{ t.study.prev }}
           </button>
@@ -215,22 +215,30 @@ const goToCountry = (index: number) => {
       </div>
 
       <div class="flex-1 overflow-y-auto px-4 mt-4 pb-4">
-        <div class="w-full max-w-2xl mx-auto grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
+        <div class="w-full max-w-2xl mx-auto grid gap-2"
+             :class="quizMode === 'flag-to-name' ? 'grid-cols-5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'">
           <div
             v-for="(country, index) in filteredCountries"
             :key="country.id"
             @click="goToCountry(index)"
             :class="{
               'border-4 border-blue-500': index === currentIndex,
-              'border border-gray-300': index !== currentIndex,
+              'border-4 border-transparent': index !== currentIndex,
             }"
-            class="aspect-square cursor-pointer rounded overflow-hidden hover:shadow-lg transition-shadow bg-gray-100 flex items-center justify-center p-1"
+            class="cursor-pointer rounded overflow-hidden hover:shadow-lg transition-shadow bg-gray-100 flex items-center justify-center p-1 box-border"
           >
             <img
+              v-if="quizMode === 'flag-to-name'"
               :src="country.flag_image_url"
               :alt="country.name"
-              class="w-full h-full object-contain"
+              class="w-full h-full object-contain aspect-square"
             />
+            <span
+              v-else
+              class="text-xs sm:text-sm font-medium text-center px-2 py-4"
+            >
+              {{ country.name }}
+            </span>
           </div>
         </div>
       </div>

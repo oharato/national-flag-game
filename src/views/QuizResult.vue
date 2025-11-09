@@ -92,14 +92,14 @@ const getRegionLabel = (region: string) => {
     </div>
 
     <div class="space-y-6 bg-white p-8 border-2 border-gray-300 rounded-lg shadow-lg">
-      <div class="text-2xl">
-        {{ t.quizResult.correctAnswers }}: <span class="font-bold text-3xl">{{ quizStore.correctAnswers }} / {{ quizStore.questions.length }}</span> {{ t.quizResult.questions }}
+      <div class="text-2xl flex items-baseline">
+        <span class="inline-block w-32 text-right flex-shrink-0">{{ t.quizResult.correctAnswers }}</span><span class="flex-shrink-0">:&nbsp;</span><span class="font-bold text-3xl">{{ quizStore.correctAnswers }} / {{ quizStore.questions.length }}</span> <span class="ml-1">{{ t.quizResult.questions }}</span>
       </div>
-      <div class="text-2xl">
-        {{ t.quizResult.time }}: <span class="font-bold text-3xl">{{ quizStore.totalTime.toFixed(2) }}</span> {{ t.quizResult.seconds }}
+      <div class="text-2xl flex items-baseline">
+        <span class="inline-block w-32 text-right flex-shrink-0">{{ t.quizResult.time }}</span><span class="flex-shrink-0">:&nbsp;</span><span class="font-bold text-3xl">{{ quizStore.totalTime.toFixed(2) }}</span> <span class="ml-1">{{ t.quizResult.seconds }}</span>
       </div>
-      <div class="text-3xl font-bold text-indigo-600">
-        {{ t.quizResult.score }}: <span class="text-5xl">{{ quizStore.finalScore }}</span> {{ t.quizResult.points }}
+      <div class="text-3xl font-bold text-indigo-600 flex items-baseline">
+        <span class="inline-block w-32 text-right flex-shrink-0">{{ t.quizResult.score }}</span><span class="flex-shrink-0">:&nbsp;</span><span class="text-5xl">{{ quizStore.finalScore }}</span> <span class="ml-1">{{ t.quizResult.points }}</span>
       </div>
     </div>
 
@@ -109,12 +109,12 @@ const getRegionLabel = (region: string) => {
         <div v-for="(record, index) in quizStore.answerHistory" :key="index" class="p-4 border rounded-lg shadow-sm" :class="{ 'bg-green-50': record.isCorrect, 'bg-red-50': !record.isCorrect }">
           <p class="font-bold text-lg mb-2">{{ t.quizResult.question }} {{ index + 1 }}</p>
           <div class="flex items-center mb-2">
-            <span class="inline-block w-28 text-right mr-2">{{ t.quizResult.questionLabel }}:</span>
+            <span class="inline-block w-33 text-right mr-2">{{ t.quizResult.questionLabel }}:</span>
             <img v-if="record.question.questionType === 'flag-to-name'" :src="record.question.correctAnswer.flag_image_url" :alt="record.question.correctAnswer.name" class="h-12 w-auto object-contain border mr-2">
             <span v-else class="font-semibold">{{ record.question.correctAnswer.name }}</span>
           </div>
           <div class="flex items-center mb-2">
-            <span class="inline-block w-28 text-right mr-2">{{ t.quizResult.yourAnswer }}:</span>
+            <span class="inline-block w-33 text-right mr-2">{{ t.quizResult.yourAnswer }}:</span>
             <template v-if="record.question.questionType === 'flag-to-name'">
               <span :class="{ 'text-green-700 font-bold': record.isCorrect, 'text-red-700 font-bold': !record.isCorrect }">
                 {{ getCountryById(record.selectedAnswerId)?.name || t.quizResult.unknown }}
@@ -125,7 +125,7 @@ const getRegionLabel = (region: string) => {
             </template>
           </div>
           <div v-if="!record.isCorrect" class="flex items-center">
-            <span class="inline-block w-28 text-right mr-2">{{ t.quizResult.correctAnswer }}:</span>
+            <span class="inline-block w-33 text-right mr-2">{{ t.quizResult.correctAnswer }}:</span>
             <template v-if="record.question.questionType === 'flag-to-name'">
               <span class="text-green-700 font-bold">{{ record.question.correctAnswer.name }}</span>
             </template>
