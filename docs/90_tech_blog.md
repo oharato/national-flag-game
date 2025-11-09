@@ -1117,6 +1117,128 @@ AIアシスタントとの二人三脚で開発した国旗学習アプリは、
 
 特に、Intersection Observer API、vite-plugin-pwa、Biomeといった新しい技術については、AIが即座にベストプラクティスを提示できたことが大きな時間節約になりました。
 
+## トラブルシューティング：テスト失敗への対処
+
+開発の最終段階で、113件のテスト中18件が失敗するという問題に直面しました。この問題の原因と解決プロセスは、ツールの自動修正機能の落とし穴を示す興味深い事例となりました。
+
+### 問題の発見
+
+`npm run test`を実行したところ、以下の2種類の問題が発生していることが判明しました：
+
+1. **命名規則の不一致**: 関数や変数が`_functionName`のようにアンダースコア付きで定義されているのに、テンプレートでは`functionName`として参照していた
+2. **コンポーネントのimport欠如**: Vueコンポーネントで必要なコンポーネントが明示的にimportされていない
+
+### 原因の特定：Biomeの自動修正
+
+調査の結果、これらの問題はBiomeのlinterによる自動修正が原因であることが分かりました：
+
+```typescript
+// 元のコード
+const handleLoad = () => {
+  isLoaded.value = true;
+};
+
+// Biomeが自動修正した結果（未使用変数と判断）
+const _handleLoad = () => {  // ← アンダースコア付きに変更
+  isLoaded.value = true;
+};
+```
+
+同様に、Vueテンプレートで使用されているコンポーネントのimportも、Biomeの`organizeImports`機能によって「未使用」と判断され削除されていました：
+
+```vue
+<script setup>
+// Biomeが削除してしまったimport
+import AppButton from '../components/AppButton.vue';
+import LanguageSelector from '../components/LanguageSelector.vue';
+</script>
+
+<template>
+  <!-- テンプレートでは使用されている -->
+  <AppButton>Click</AppButton>
+  <LanguageSelector />
+</template>
+```
+
+### 解決策：Biome設定の調整
+
+問題を解決するため、`biome.json`に以下の設定を追加しました：
+
+```json
+{
+  "linter": {
+    "rules": {
+      "correctness": {
+        "noUnusedVariables": "off"  // アンダースコア自動追加を防止
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.vue"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedImports": "off"  // Vueファイルでimport削除を防止
+          }
+        }
+      },
+      "assist": {
+        "enabled": false  // Vueファイルで自動整理を無効化
+      }
+    }
+  ]
+}
+```
+
+この設定により：
+- 未使用変数に`_`プレフィックスが自動追加されなくなる
+- Vueファイルのコンポーネントimportが削除されなくなる
+- TypeScript/Vue Language Serverからの警告は引き続き表示される（コードレビュー時に気づける）
+
+### 修正作業の実施
+
+設定変更後、以下のファイルを修正しました：
+
+**命名規則の修正:**
+- `LazyImage.vue`: `_handleLoad` → `handleLoad`
+- `QuizPlay.vue`: `_onImageLoad`, `_handleMouseEnter` → アンダースコアなし
+- `QuizSetup.vue`: `_clearNicknameError` → `clearNicknameError`
+- `QuizResult.vue`: `_goToRanking`, `_goToHome`, `_getCountryById` など → アンダースコアなし
+- `Study.vue`: `_availableContinents`, `_currentCountry`, `_toggleFlip`, `_goToCountry` → アンダースコアなし
+- `RegionSelector.vue`: `_availableContinents`, `_getDisplayContinentName` など → アンダースコアなし
+
+**コンポーネントimportの追加:**
+- `Home.vue`: `AppButton`, `LanguageSelector`
+- `QuizSetup.vue`: `AppButton`, `QuizFormatSelector`, `RegionSelector`
+- `QuizResult.vue`: `AppButton`
+- `Study.vue`: `FlagCard`, `CountryDetailCard`, `LazyImage`
+- `Ranking.vue`: `formatDateTime`関数をimport
+
+### 結果
+
+修正後、全113件のテストが合格しました：
+
+```
+Test Files  9 passed (9)
+     Tests  113 passed (113)
+  Duration  2.88s
+```
+
+### 学んだこと
+
+このトラブルシューティングから得られた教訓：
+
+1. **ツールの自動修正は便利だが注意が必要**: Linterやフォーマッターの自動修正機能は便利ですが、フレームワーク特有の機能（VueのSFC、テンプレート内での使用など）を正しく理解できない場合があります
+
+2. **テストの重要性**: 自動修正後もテストを実行することで、意図しない変更を早期に発見できます
+
+3. **設定の細かな調整**: ツールの動作を理解し、プロジェクトに合わせて適切に設定することが重要です
+
+4. **フレームワーク固有の制約**: Vueの場合、テンプレート内での使用は静的解析が難しいため、特別な設定が必要になることがあります
+
+この経験は、モダンな開発ツールの恩恵を受けながらも、その動作原理を理解し適切に制御することの重要性を教えてくれました。
+
 ### AIとの協業の価値
 
 AIとの協業は、開発者がより創造的なタスクに集中できる可能性を秘めていると同時に、AIの能力を最大限に引き出すための「指示の技術」の重要性も再認識させてくれました。

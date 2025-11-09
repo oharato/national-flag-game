@@ -246,4 +246,152 @@
     *   ローカル: `npx wrangler d1 migrations apply national-flag-game-db --local`
     *   本番: `npx wrangler d1 migrations apply national-flag-game-db --remote`
 *   **自動適用**: GitHub Actionsのデプロイワークフローで本番環境へのマイグレーションが自動実行される
+
+### 3.5. 開発環境とコード品質
+
+#### コード品質管理
+*   **Linter & Formatter**: **Biome**
+    *   ESLintとPrettierの代替として、10-100倍高速な処理速度を実現
+    *   統一されたコードスタイルと品質基準の自動適用
+    *   **設定ファイル**: `biome.json`
+
+#### Biome設定の詳細
+
+基本設定:
+```json
+{
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingCommas": "es5"
+    }
+  }
+}
+```
+
+**Vue特有の問題への対応:**
+
+Vueコンポーネント（SFC）では、テンプレート内で使用されるコンポーネントやメソッドが静的解析で正しく検出されないことがあります。そのため、以下の設定でVueファイルのみ特別な扱いをしています:
+
+```json
+{
+  "linter": {
+    "rules": {
+      "correctness": {
+        "noUnusedVariables": "off"  // アンダースコア自動追加を防止
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.vue"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedImports": "off"  // Vueファイルでimport削除を防止
+          }
+        }
+      },
+      "assist": {
+        "enabled": false  // Vueファイルで自動整理を無効化
+      }
+    }
+  ]
+}
+```
+
+**設定の理由:**
+
+1. **noUnusedVariables: off**
+   - Vueテンプレートで使用されるメソッドが「未使用」と誤検出される問題に対応
+   - 自動的に`_`プレフィックスが追加されることを防止
+   - 例: `handleLoad` → `_handleLoad` のような意図しない変更を防ぐ
+
+2. **noUnusedImports: off (Vueファイルのみ)**
+   - テンプレートで使用されるコンポーネントのimportが削除される問題に対応
+   - 例: `AppButton`, `LanguageSelector`などのコンポーネントimportを保持
+
+3. **assist: false (Vueファイルのみ)**
+   - `organizeImports`機能によるimport削除を完全に防止
+   - TypeScript/Vue Language Serverからの警告は引き続き表示される
+
+**実行コマンド:**
+```bash
+npm run lint         # チェックのみ
+npm run lint:fix     # 自動修正
+npm run format       # フォーマットのみ
+```
+
+#### Git Pre-commit Hooks
+*   **ツール**: **husky** + **lint-staged**
+*   **目的**: コミット前に自動的にコード品質チェックとフォーマットを実行
+*   **設定ファイル**: 
+    *   `.husky/pre-commit`: フック実行スクリプト
+    *   `package.json`: lint-staged設定
+
+**lint-staged設定:**
+```json
+{
+  "lint-staged": {
+    "*.{js,ts,vue,json,mts}": [
+      "biome check --write --unsafe --no-errors-on-unmatched"
+    ]
+  }
+}
+```
+
+**動作:**
+1. `git commit`実行時に自動的にトリガー
+2. ステージングされたファイルに対してBiomeを実行
+3. 自動修正可能な問題は修正してコミット
+4. 修正不可能なエラーがある場合はコミットを中断
+
+**セットアップ:**
+```bash
+npm install           # huskyが自動的にフックを設定
+npm run prepare       # 手動でフックを再設定する場合
+```
+
+#### テスト環境
+*   **テストフレームワーク**: **Vitest**
+*   **コンポーネントテスト**: **@vue/test-utils**
+*   **DOM環境**: **happy-dom** (高速なDOM実装)
+*   **カバレッジ**: Vitestの組み込みカバレッジ機能
+
+**テスト実行コマンド:**
+```bash
+npm run test              # 全テスト実行
+npm run test:ui           # UIモードで実行
+npm run test:coverage     # カバレッジ計測
+```
+
+**テスト構成:**
+- ストアテスト: `src/store/__tests__/`
+- コンポーネントテスト: `src/components/__tests__/`
+- ビューテスト: `src/views/__tests__/`
+- ユーティリティテスト: `src/utils/__tests__/`
+- バックエンドテスト: `functions/api/__tests__/`
+
+**総テスト数: 113件** (2024年11月時点)
+- ストアテスト: 32件
+- コンポーネントテスト: 11件
+- ビューテスト: 44件
+- ユーティリティテスト: 16件
+- バックエンドテスト: 10件
+
+#### 型安全性
+*   **TypeScript**: strict モード有効
+*   **設定ファイル**: `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`
+*   **型チェック**: `vue-tsc` によるビルド時型チェック
+*   **Workers型定義**: `@cloudflare/workers-types` でCloudflare環境の型サポート
+```
+
+````
 ```
