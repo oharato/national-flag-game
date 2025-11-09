@@ -16,8 +16,7 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "batch:create-data": "tsx scripts/generate-data.mts",
-    "batch:create-list": "tsx scripts/generate-country-list.mts",
-    "batch:investigate-data": "tsx scripts/investigate-country-data.mts"
+    "batch:create-list": "tsx scripts/generate-country-list.mts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.6",
@@ -41,6 +40,7 @@
     "@vue/tsconfig": "^0.8.1",
     "autoprefixer": "^10.4.21",
     "happy-dom": "^20.0.10",
+    "jsdom": "^27.1.0",
     "npm-run-all": "^4.1.5",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.17",

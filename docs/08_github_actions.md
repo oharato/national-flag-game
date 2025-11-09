@@ -1,7 +1,47 @@
-# GitHub Actions 自動デプロイ設定ガイド
+# GitHub Actions 自動テスト・デプロイ設定ガイド
 
 ## 概要
-このガイドでは、GitHub の main/master ブランチへのプッシュまたはマージ時に、自動的に Cloudflare Pages へデプロイする設定方法を説明します。
+このガイドでは、GitHub のプルリクエスト作成時およびmain/masterブランチへのマージ時に、自動的にテストを実行し、Cloudflare Pagesへデプロイする設定方法を説明します。
+
+## ワークフローの構成
+
+本プロジェクトでは、以下の2つのGitHub Actionsワークフローを使用しています:
+
+### 1. テストワークフロー (`.github/workflows/test.yml`)
+プルリクエスト時とブランチへのプッシュ時に自動実行されます。
+
+**トリガー**:
+- プルリクエストがmain/masterブランチに対して作成された時
+- main/masterブランチへのプッシュ時
+
+**実行内容**:
+1. リポジトリのチェックアウト
+2. Node.js 20のセットアップ
+3. 依存関係のインストール (`npm ci`)
+4. テストの実行 (`npm test -- --run`)
+5. ビルド（型チェック含む） (`npm run build`)
+
+### 2. デプロイワークフロー (`.github/workflows/deploy.yml`)
+main/masterブランチへのプッシュ時のみ自動実行され、テスト成功後にデプロイします。
+
+**トリガー**:
+- main/masterブランチへのプッシュ時のみ
+
+**実行内容**:
+1. **testジョブ**: テストを実行
+2. **deployジョブ**: テストが成功した後にのみ実行（`needs: test`）
+   - リポジトリのチェックアウト
+   - Node.js 20のセットアップ
+   - 依存関係のインストール
+   - ビルド
+   - Cloudflare Pagesへのデプロイ
+
+## ワークフローの利点
+
+- **品質保証**: プルリクエスト時に必ずテストが実行され、問題を早期発見
+- **自動デプロイ**: mainブランチへのマージ時に自動でデプロイ
+- **安全性**: テストが失敗した場合、デプロイは実行されない
+- **ブランチ保護**: GitHubのブランチ保護ルールと組み合わせることで、テスト失敗時のマージを防止
 
 ## 前提条件
 - GitHub リポジトリが作成済み
@@ -61,34 +101,156 @@ npx wrangler whoami
 
 ### 4. ワークフローファイルの確認
 
-`.github/workflows/deploy.yml` が既に作成されています。このファイルは以下を実行します:
+本プロジェクトには以下の2つのワークフローファイルが存在します:
 
-- main/master ブランチへのプッシュ時に自動実行
-- プルリクエスト時にもプレビューデプロイを実行
-- Node.js 環境のセットアップ
-- 依存関係のインストール
-- プロジェクトのビルド
-- Cloudflare Pages へのデプロイ
+#### `.github/workflows/test.yml`
+プルリクエスト時とプッシュ時にテストを実行するワークフローです。
+
+```yaml
+name: Run Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Run Tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --run
+
+      - name: Build (includes type check)
+        run: npm run build
+```
+
+#### `.github/workflows/deploy.yml`
+mainブランチへのプッシュ時にテストを実行し、成功後にデプロイするワークフローです。
+
+```yaml
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Run Tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --run
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: read
+      deployments: write
+    name: Deploy to Cloudflare Pages
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        run: npx wrangler pages deploy dist --project-name=national-flag-game
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+```
+
+**注**: 
+- `needs: test` により、testジョブが成功した場合のみdeployジョブが実行されます
+- 最新の `wrangler pages deploy` コマンドを直接使用しており、非推奨の `wrangler pages publish` は使用していません
 
 ### 5. 動作確認
 
-#### ステップ 1: リポジトリにプッシュ
+#### ステップ 1: プルリクエストの作成
 ```bash
+# フィーチャーブランチを作成
+git checkout -b feature/new-feature
 git add .
-git commit -m "Add GitHub Actions deployment workflow"
-git push origin main
+git commit -m "Add new feature"
+git push origin feature/new-feature
+
+# GitHubでプルリクエストを作成
 ```
 
-#### ステップ 2: GitHub Actions の実行を確認
+プルリクエストを作成すると、自動的に `Run Tests` ワークフローが実行されます:
+1. GitHub リポジトリの **Pull requests** タブを開く
+2. 作成したプルリクエストをクリック
+3. **Checks** タブで「Run Tests」ワークフローが実行されていることを確認
+4. 緑色のチェックマーク ✅ が表示されれば成功
+
+#### ステップ 2: mainブランチへのマージ
+プルリクエストをマージすると、以下が自動実行されます:
+1. `Run Tests` ワークフローが実行される
+2. テストが成功すると `Deploy to Cloudflare Pages` ワークフローが実行される
+
+#### ステップ 3: デプロイを確認
 1. GitHub リポジトリの **Actions** タブを開く
 2. 「Deploy to Cloudflare Pages」ワークフローが実行されていることを確認
 3. 緑色のチェックマーク ✅ が表示されれば成功
-
-#### ステップ 3: デプロイを確認
-- ワークフローのログに Cloudflare Pages のデプロイ URL が表示されます
-- または https://national-flag-game.pages.dev にアクセスして確認
+4. ワークフローのログに Cloudflare Pages のデプロイ URL が表示されます
+5. または https://national-flag-game.pages.dev にアクセスして確認
 
 ## トラブルシューティング
+
+### テストエラー
+- ローカルで `npm test -- --run` が成功するか確認
+- テストファイルに構文エラーがないか確認
+- モックやフィクスチャが正しく設定されているか確認
+
+### ビルドエラー
+- ローカルで `npm run build` が成功するか確認
+- `package.json` の依存関係が正しく記載されているか確認
+- TypeScriptの型エラーがないか確認
 
 ### エラー: "API token is invalid"
 - `CLOUDFLARE_API_TOKEN` が正しく設定されているか確認
@@ -132,10 +294,21 @@ npm run deploy
 
 この設定により、以下のワークフローが実現されます:
 
-1. 開発者がコードを変更
-2. `git push origin main` でプッシュ
-3. GitHub Actions が自動的にビルド
+### プルリクエスト作成時
+1. 開発者がフィーチャーブランチでコードを変更
+2. プルリクエストを作成
+3. GitHub Actions が自動的にテストとビルドを実行
+4. テストが失敗した場合、レビュー前に問題を検出
+5. テスト成功後、安全にマージ可能
+
+### mainブランチへのマージ時
+1. プルリクエストがマージされる
+2. GitHub Actions がテストを実行
+3. テストが成功した場合のみビルドを実行
 4. Cloudflare Pages に自動デプロイ
 5. 本番環境が更新される
 
-これにより、手動デプロイの手間が省け、デプロイミスも削減されます。
+これにより、以下が実現されます:
+- **品質保証**: mainブランチに問題のあるコードがマージされるのを防ぐ
+- **手動デプロイの削減**: デプロイミスの削減
+- **CI/CDパイプライン**: 自動テスト→自動デプロイの完全自動化

@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
 body {
-  @apply bg-gray-50 text-gray-800;
+  background-color: rgb(249 250 251);
+  color: rgb(31 41 55);
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+h2 {
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
 }

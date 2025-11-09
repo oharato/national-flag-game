@@ -36,6 +36,7 @@ describe('QuizSetup.vue', () => {
 
     const countriesStore = useCountriesStore();
     countriesStore.countries = mockCountries;
+    countriesStore.currentLanguage = 'ja'; // 日本語を選択
   });
 
   afterEach(() => {
@@ -87,7 +88,8 @@ describe('QuizSetup.vue', () => {
       },
     });
 
-    const select = wrapper.find('#region');
+    // RegionSelectorコンポーネント内のselectを探す
+    const select = wrapper.find('select');
     await select.setValue('Asia');
     
     expect((select.element as HTMLSelectElement).value).toBe('Asia');
@@ -113,10 +115,7 @@ describe('QuizSetup.vue', () => {
     expect((select.element as HTMLSelectElement).value).toBe('30');
   });
 
-  it('ニックネームが空の場合、アラートが表示される', async () => {
-    const alertMock = vi.fn();
-    globalThis.alert = alertMock;
-    
+  it('ニックネームが空の場合、エラーメッセージが表示される', async () => {
     const wrapper = mount(QuizSetup, {
       global: {
         plugins: [router],
@@ -129,13 +128,12 @@ describe('QuizSetup.vue', () => {
     const form = wrapper.find('form');
     await form.trigger('submit');
     
-    expect(alertMock).toHaveBeenCalledWith('ニックネームを入力してください。');
+    await wrapper.vm.$nextTick();
+    
+    expect(wrapper.text()).toContain('ニックネームを入力してください。');
   });
 
-  it('ニックネームが21文字以上の場合、アラートが表示される', async () => {
-    const alertMock = vi.fn();
-    globalThis.alert = alertMock;
-    
+  it('ニックネームが21文字以上の場合、エラーメッセージが表示される', async () => {
     const wrapper = mount(QuizSetup, {
       global: {
         plugins: [router],
@@ -148,13 +146,12 @@ describe('QuizSetup.vue', () => {
     const form = wrapper.find('form');
     await form.trigger('submit');
     
-    expect(alertMock).toHaveBeenCalledWith('ニックネームは20文字以内で入力してください。');
+    await wrapper.vm.$nextTick();
+    
+    expect(wrapper.text()).toContain('ニックネームは20文字以内で入力してください。');
   });
 
   it('HTMLタグを含むニックネームは拒否される', async () => {
-    const alertMock = vi.fn();
-    globalThis.alert = alertMock;
-    
     const wrapper = mount(QuizSetup, {
       global: {
         plugins: [router],
@@ -167,7 +164,9 @@ describe('QuizSetup.vue', () => {
     const form = wrapper.find('form');
     await form.trigger('submit');
     
-    expect(alertMock).toHaveBeenCalledWith('ニックネームに使用できない文字が含まれています。');
+    await wrapper.vm.$nextTick();
+    
+    expect(wrapper.text()).toContain('ニックネームに使用できない文字が含まれています。');
   });
 
   it('正常なニックネームでクイズが開始される', async () => {
@@ -202,7 +201,8 @@ describe('QuizSetup.vue', () => {
       },
     });
 
-    const select = wrapper.find('#region');
+    // RegionSelectorコンポーネント内のselectとoptionsを探す
+    const select = wrapper.find('select');
     const options = select.findAll('option');
     
     // "全世界" + Asia, Europe, North America

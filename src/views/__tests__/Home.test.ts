@@ -20,6 +20,9 @@ describe('Home.vue', () => {
         { path: '/ranking', component: { template: '<div>Ranking</div>' } },
       ],
     });
+
+    const countriesStore = useCountriesStore();
+    countriesStore.currentLanguage = 'ja'; // 日本語を選択
   });
 
   afterEach(() => {
@@ -33,7 +36,7 @@ describe('Home.vue', () => {
       },
     });
 
-    expect(wrapper.find('h1').text()).toBe('国旗学習アプリ');
+    expect(wrapper.find('h1').text()).toBe('国旗ゲーム');
   });
 
   it('言語選択ドロップダウンが表示される', () => {

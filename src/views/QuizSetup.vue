@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuizStore, type QuizFormat, type QuizRegion } from '../store/quiz';
 import { useCountriesStore } from '../store/countries';
-import type { Language } from '../store/countries'; // Language型をインポート
+import RegionSelector from '../components/RegionSelector.vue';
+import QuizFormatSelector from '../components/QuizFormatSelector.vue';
+import AppButton from '../components/AppButton.vue';
+import { useTranslation } from '../composables/useTranslation';
 
 const router = useRouter();
 const quizStore = useQuizStore();
 const countriesStore = useCountriesStore();
+const { t } = useTranslation();
 
 // localStorageからニックネームを読み込む
 const NICKNAME_STORAGE_KEY = 'quiz_nickname';
@@ -15,63 +19,8 @@ const savedNickname = localStorage.getItem(NICKNAME_STORAGE_KEY);
 const nickname = ref(savedNickname || quizStore.nickname);
 const quizFormat = ref<QuizFormat>(quizStore.quizFormat);
 const quizRegion = ref<QuizRegion>(quizStore.quizRegion);
-const numberOfQuestions = ref(quizStore.numberOfQuestions); // 問題数を追加
-
-// 大陸名の多言語マッピング（英語→表示名）
-const continentNames: Record<Language, Record<string, string>> = {
-  ja: {
-    'Africa': 'アフリカ',
-    'アフリカ': 'アフリカ',
-    'Asia': 'アジア',
-    'アジア': 'アジア',
-    'Europe': 'ヨーロッパ',
-    'ヨーロッパ': 'ヨーロッパ',
-    'North America': '北アメリカ',
-    '北アメリカ': '北アメリカ',
-    'South America': '南アメリカ',
-    '南アメリカ': '南アメリカ',
-    'Oceania': 'オセアニア',
-    'オセアニア': 'オセアニア',
-    'Antarctica': '南極',
-    '南極': '南極',
-    'all': '全世界',
-  },
-  en: {
-    'Africa': 'Africa',
-    'アフリカ': 'Africa',
-    'Asia': 'Asia',
-    'アジア': 'Asia',
-    'Europe': 'Europe',
-    'ヨーロッパ': 'Europe',
-    'North America': 'North America',
-    '北アメリカ': 'North America',
-    'South America': 'South America',
-    '南アメリカ': 'South America',
-    'Oceania': 'Oceania',
-    'オセアニア': 'Oceania',
-    'Antarctica': 'Antarctica',
-    '南極': 'Antarctica',
-    'all': 'All World',
-  },
-};
-
-// 大陸の正規化マップ（英語版に統一）
-const normalizeContinentMap: Record<string, string> = {
-  'Africa': 'Africa',
-  'アフリカ': 'Africa',
-  'Asia': 'Asia',
-  'アジア': 'Asia',
-  'Europe': 'Europe',
-  'ヨーロッパ': 'Europe',
-  'North America': 'North America',
-  '北アメリカ': 'North America',
-  'South America': 'South America',
-  '南アメリカ': 'South America',
-  'Oceania': 'Oceania',
-  'オセアニア': 'Oceania',
-  'Antarctica': 'Antarctica',
-  '南極': 'Antarctica',
-};
+const numberOfQuestions = ref(quizStore.numberOfQuestions);
+const nicknameError = ref<string>('');
 
 // 国データがないとクイズが始められないので、ここで読み込んでおく
 onMounted(() => {
@@ -91,44 +40,26 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 };
 
-// 利用可能な大陸のリストを計算（重複を除去して正規化）
-const availableContinents = computed(() => {
-  const continents = new Set<string>();
-  countriesStore.countries.forEach(country => {
-    if (country.continent && country.continent !== 'N/A') {
-      // 大陸名を正規化（英語版または日本語版どちらでも同じキーにマップ）
-      const normalized = normalizeContinentMap[country.continent] || country.continent;
-      continents.add(normalized);
-    }
-  });
-  return Array.from(continents).sort();
-});
-
-// 表示用の大陸名を取得するヘルパー
-const getDisplayContinentName = (continent: string) => {
-  return continentNames[countriesStore.currentLanguage][continent] || continent;
-};
-
 // ニックネームのバリデーション
 const validateNickname = (name: string): { valid: boolean; error?: string } => {
   const trimmed = name.trim();
   
   if (trimmed.length === 0) {
-    return { valid: false, error: 'ニックネームを入力してください。' };
+    return { valid: false, error: t.value.quizSetup.nicknameRequired };
   }
   
   if (trimmed.length > 20) {
-    return { valid: false, error: 'ニックネームは20文字以内で入力してください。' };
+    return { valid: false, error: t.value.quizSetup.nicknameTooLong };
   }
   
   // 危険な文字をチェック（HTMLタグ、スクリプトインジェクション対策）
   if (/<|>|&lt;|&gt;|<script|javascript:|on\w+=/i.test(trimmed)) {
-    return { valid: false, error: 'ニックネームに使用できない文字が含まれています。' };
+    return { valid: false, error: t.value.quizSetup.nicknameInvalidChars };
   }
   
   // 制御文字をチェック
   if (/[\x00-\x1F\x7F-\x9F]/.test(trimmed)) {
-    return { valid: false, error: 'ニックネームに使用できない文字が含まれています。' };
+    return { valid: false, error: t.value.quizSetup.nicknameInvalidChars };
   }
   
   return { valid: true };
@@ -138,9 +69,12 @@ const startQuiz = () => {
   const validation = validateNickname(nickname.value);
   
   if (!validation.valid) {
-    alert(validation.error);
+    nicknameError.value = validation.error || '';
     return;
   }
+  
+  // エラーをクリア
+  nicknameError.value = '';
   
   // ニックネームをトリミングして保存
   const sanitizedNickname = nickname.value.trim();
@@ -148,81 +82,78 @@ const startQuiz = () => {
   quizStore.setupQuiz(sanitizedNickname, quizFormat.value, quizRegion.value, numberOfQuestions.value);
   router.push('/quiz/play');
 };
+
+// ニックネーム入力時にエラーをクリア
+const clearNicknameError = () => {
+  if (nicknameError.value) {
+    nicknameError.value = '';
+  }
+};
 </script>
 
 <template>
   <div class="container mx-auto p-4 max-w-lg">
-    <router-link to="/" class="text-blue-500 hover:underline">&lt; トップページに戻る</router-link>
-    <h2 class="text-3xl font-bold my-6 text-center">クイズ設定</h2>
+    <router-link to="/" class="text-blue-500 hover:underline">{{ t.common.backToHome }}</router-link>
+    <h2 class="text-3xl font-bold my-6 text-center">{{ t.quizSetup.title }}</h2>
 
     <form @submit.prevent="startQuiz" class="space-y-6">
       <div>
-        <label for="nickname" class="block text-lg font-medium text-gray-700">ニックネーム（最大20文字）</label>
+        <label for="nickname" class="block text-lg font-medium text-gray-700">{{ t.quizSetup.nickname }}</label>
         <input
           type="text"
           id="nickname"
           v-model="nickname"
+          @input="clearNicknameError"
           maxlength="20"
-          class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-          placeholder="ニックネームを入力"
+          class="mt-1 block w-full px-3 py-2 bg-white border rounded-md shadow-sm focus:outline-none focus:ring-2"
+          :class="nicknameError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'"
+          :placeholder="t.quizSetup.nicknamePlaceholder"
         />
+        <p v-if="nicknameError" class="mt-1 text-sm text-red-600">
+          {{ nicknameError }}
+        </p>
       </div>
 
-      <div>
-        <label class="block text-lg font-medium text-gray-700">クイズ形式</label>
-        <div class="mt-2 space-y-2">
-          <label class="inline-flex items-center">
-            <input type="radio" class="form-radio" name="quizFormat" value="flag-to-name" v-model="quizFormat">
-            <span class="ml-2">国旗を見て国名を選ぶ</span>
-          </label>
-          <br>
-          <label class="inline-flex items-center">
-            <input type="radio" class="form-radio" name="quizFormat" value="name-to-flag" v-model="quizFormat">
-            <span class="ml-2">国名を見て国旗を選ぶ</span>
-          </label>
-        </div>
-      </div>
+      <QuizFormatSelector 
+        v-model="quizFormat" 
+        :label="t.quizSetup.quizFormat"
+        variant="radio"
+      />
+
+      <RegionSelector 
+        v-model="quizRegion" 
+        :label="t.quizSetup.region"
+        always-show-label
+      />
 
       <div>
-        <label for="region" class="block text-lg font-medium text-gray-700">出題範囲</label>
-        <select
-          id="region"
-          v-model="quizRegion"
-          class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-        >
-          <option value="all">{{ getDisplayContinentName('all') }}</option>
-          <option v-for="continent in availableContinents" :key="continent" :value="continent">
-            {{ getDisplayContinentName(continent) }}
-          </option>
-        </select>
-      </div>
-
-      <div>
-        <label for="numQuestions" class="block text-lg font-medium text-gray-700">問題数</label>
+        <label for="numQuestions" class="block text-sm font-medium text-gray-700 mb-1">{{ t.quizSetup.numberOfQuestions }}</label>
         <select
           id="numQuestions"
           v-model.number="numberOfQuestions"
-          class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+          class="w-full px-2 py-1.5 md:px-3 md:py-2 text-sm md:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
-          <option :value="5">5問</option>
-          <option :value="10">10問</option>
-          <option :value="30">30問</option>
-          <option :value="999">すべて</option>
+          <option :value="5">{{ t.quizSetup.questions5 }}</option>
+          <option :value="10">{{ t.quizSetup.questions10 }}</option>
+          <option :value="30">{{ t.quizSetup.questions30 }}</option>
+          <option :value="999">{{ t.quizSetup.questionsAll }}</option>
         </select>
       </div>
 
       <div>
-        <button
+        <AppButton
           type="submit"
+          variant="secondary"
+          size="lg"
+          full-width
           :disabled="countriesStore.loading || !!countriesStore.error || countriesStore.countries.length === 0"
-          class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-400"
         >
-          <span v-if="countriesStore.loading">データ準備中...</span>
-          <span v-else-if="countriesStore.error">エラー発生</span>
-          <span v-else-if="countriesStore.countries.length === 0">データなし</span>
-          <span v-else>スタート</span>
-        </button>
-        <p class="mt-2 text-sm text-gray-500 text-center">ヒント: Ctrl+Enter でクイズ開始</p>
+          <span v-if="countriesStore.loading">{{ t.quizSetup.preparingData }}</span>
+          <span v-else-if="countriesStore.error">{{ t.quizSetup.error }}</span>
+          <span v-else-if="countriesStore.countries.length === 0">{{ t.quizSetup.noData }}</span>
+          <span v-else>{{ t.quizSetup.start }}</span>
+        </AppButton>
+        <p class="mt-2 text-sm text-gray-500 text-center">{{ t.quizSetup.keyboardHint }}</p>
       </div>
     </form>
   </div>

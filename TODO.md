@@ -98,6 +98,7 @@
     - [x] D1Database型エラーの解決
     - [x] wikijs型定義の追加
     - [x] quiz.ts型エラーの修正（null安全性）
+    - [x] 'props' is declared but its value is never read. の解消
 - [x] 6.7. コードリファクタリング
     - [x] 不要なコメントの削除
     - [x] 共通モックデータの抽出 (src/__tests__/fixtures/countries.ts)
@@ -135,4 +136,5 @@
     - [x] Cloudflare API トークンの秘匿化
     - [x] docs/08_github_actions.md の作成
     - [x] README.md に自動デプロイ手順を追加
+    - [x] wrangler pages deploy コマンドへの移行（非推奨警告の解消）
 

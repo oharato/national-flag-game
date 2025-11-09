@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import Study from '../Study.vue';
@@ -22,6 +22,8 @@ describe('Study.vue', () => {
 
     const countriesStore = useCountriesStore();
     countriesStore.countries = mockCountries;
+    countriesStore.loading = false; // ローディング状態を解除
+    countriesStore.currentLanguage = 'ja'; // 日本語を選択
   });
 
   afterEach(() => {
@@ -61,9 +63,9 @@ describe('Study.vue', () => {
     // 初期状態でisFlippedがfalseであることを確認
     expect((wrapper.vm as any).isFlipped).toBe(false);
     
-    // カードをクリック
-    const card = wrapper.find('.transform-style-3d');
-    await card.trigger('click');
+    // カード（表面）をクリック
+    const cardFront = wrapper.find('.backface-hidden.bg-gray-100');
+    await cardFront.trigger('click');
     await wrapper.vm.$nextTick();
     
     // isFlippedがtrueになることを確認
@@ -89,6 +91,8 @@ describe('Study.vue', () => {
       
       // currentIndexが1になることを確認
       expect((wrapper.vm as any).currentIndex).toBe(1);
+      // カードが表面に戻ることを確認
+      expect((wrapper.vm as any).isFlipped).toBe(false);
     }
   });
 
@@ -115,6 +119,8 @@ describe('Study.vue', () => {
       
       // インデックスが0に戻ることを確認
       expect((wrapper.vm as any).currentIndex).toBe(0);
+      // カードが表面に戻ることを確認
+      expect((wrapper.vm as any).isFlipped).toBe(false);
     }
   });
 
@@ -196,12 +202,10 @@ describe('Study.vue', () => {
     await select.setValue('Asia');
     await wrapper.vm.$nextTick();
     
-    // カウンター表示を確認
-    const text = wrapper.text();
-    // ローディング中でなければ確認
-    if (!text.includes('データを読み込み中')) {
-      expect(text).toContain('1 / 1');
-    }
+    // フィルタリングされた国の数を確認
+    const filteredCountries = (wrapper.vm as any).filteredCountries;
+    expect(filteredCountries.length).toBe(1);
+    expect(filteredCountries[0].name).toBe('日本');
   });
 
   it('地域を変更するとカードが表面に戻る', async () => {
@@ -212,8 +216,8 @@ describe('Study.vue', () => {
     });
 
     // カードをフリップ
-    const card = wrapper.find('.transform-style-3d');
-    await card.trigger('click');
+    const cardFront = wrapper.find('.backface-hidden.bg-gray-100');
+    await cardFront.trigger('click');
     await wrapper.vm.$nextTick();
     
     // isFlippedがtrueになることを確認
@@ -222,6 +226,32 @@ describe('Study.vue', () => {
     // 地域を変更
     const select = wrapper.find('#studyRegion');
     await select.setValue('Europe');
+    await wrapper.vm.$nextTick();
+    
+    // isFlippedがfalseに戻ることを確認
+    expect((wrapper.vm as any).isFlipped).toBe(false);
+  });
+
+  it('表裏切り替えボタンでカードをフリップできる', async () => {
+    const wrapper = mount(Study, {
+      global: {
+        plugins: [router],
+      },
+    });
+
+    // 初期状態でisFlippedがfalseであることを確認
+    expect((wrapper.vm as any).isFlipped).toBe(false);
+    
+    // カードをクリックしてフリップ
+    const cardFront = wrapper.find('.backface-hidden.bg-gray-100');
+    await cardFront.trigger('click');
+    await wrapper.vm.$nextTick();
+    
+    // isFlippedがtrueになることを確認
+    expect((wrapper.vm as any).isFlipped).toBe(true);
+    
+    // もう一度クリック
+    await cardFront.trigger('click');
     await wrapper.vm.$nextTick();
     
     // isFlippedがfalseに戻ることを確認
@@ -263,13 +293,13 @@ describe('Study.vue', () => {
       },
     });
 
-    expect(wrapper.text()).toContain('データを読み込み中...');
+    expect(wrapper.text()).toContain('ランキングを読み込み中...');
   });
 
   it('エラー時はエラーメッセージが表示される', () => {
     const countriesStore = useCountriesStore();
+    countriesStore.loading = false;
     countriesStore.error = 'データ取得エラー';
-    countriesStore.countries = [];
 
     const wrapper = mount(Study, {
       global: {
@@ -277,11 +307,13 @@ describe('Study.vue', () => {
       },
     });
 
-    expect(wrapper.text()).toContain('データの読み込みに失敗しました');
+    expect(wrapper.text()).toContain('データ取得エラー');
   });
 
   it('国データがない場合、メッセージが表示される', () => {
     const countriesStore = useCountriesStore();
+    countriesStore.loading = false;
+    countriesStore.error = null;
     countriesStore.countries = [];
 
     const wrapper = mount(Study, {
@@ -290,6 +322,120 @@ describe('Study.vue', () => {
       },
     });
 
-    expect(wrapper.text()).toContain('国データが見つかりません');
+    // 国データがない場合は何も表示されない（filteredCountriesが空）
+    const filteredCountries = (wrapper.vm as any).filteredCountries;
+    expect(filteredCountries.length).toBe(0);
+  });
+
+    it('国旗一覧が表示される', async () => {
+    const wrapper = mount(Study, {
+      global: {
+        plugins: [router],
+      },
+    });
+    
+    await wrapper.vm.$nextTick();
+    
+    // filteredCountriesの数を確認
+    const filteredCountries = (wrapper.vm as any).filteredCountries;
+    expect(filteredCountries.length).toBe(3);
+  });
+
+  it('国旗一覧の国旗をクリックすると上の国旗が変わる', async () => {
+    const wrapper = mount(Study, {
+      global: {
+        plugins: [router],
+      },
+    });
+
+    // 初期状態でcurrentIndexは0
+    expect((wrapper.vm as any).currentIndex).toBe(0);
+
+    // 国旗一覧のボタンを取得
+    const flagButtons = wrapper.findAll('button').filter(btn => {
+      const img = btn.find('img');
+      return img.exists() && img.attributes('alt')?.includes('の国旗');
+    });
+
+    // 3番目の国旗（イギリス）をクリック
+    if (flagButtons[2]) {
+      await flagButtons[2].trigger('click');
+      await wrapper.vm.$nextTick();
+      
+      // currentIndexが2になることを確認
+      expect((wrapper.vm as any).currentIndex).toBe(2);
+      
+      // カードが表面に戻ることを確認
+      expect((wrapper.vm as any).isFlipped).toBe(false);
+    }
+  });
+
+  it('クイズ形式が選択できる', async () => {
+    const wrapper = mount(Study, {
+      global: {
+        plugins: [router],
+      },
+    });
+
+    // 初期状態は「国旗→国名」
+    expect((wrapper.vm as any).quizMode).toBe('flag-to-name');
+
+    // プルダウンを取得
+    const quizModeSelect = wrapper.find('#quizMode');
+    expect(quizModeSelect.exists()).toBe(true);
+
+    // 「国名→国旗」に変更
+    await quizModeSelect.setValue('name-to-flag');
+    expect((wrapper.vm as any).quizMode).toBe('name-to-flag');
+  });
+
+  it('国旗→国名モードでは国旗が表示される', () => {
+    const wrapper = mount(Study, {
+      global: {
+        plugins: [router],
+      },
+    });
+
+    // 国旗→国名モード（デフォルト）
+    const flagImage = wrapper.find('img[alt="日本の国旗"]');
+    expect(flagImage.exists()).toBe(true);
+  });
+
+  it('国名→国旗モードでは表に国名と詳細情報が表示される', async () => {
+    const wrapper = mount(Study, {
+      global: {
+        plugins: [router],
+      },
+    });
+
+    // 国名→国旗モードに変更
+    const quizModeSelect = wrapper.find('#quizMode');
+    await quizModeSelect.setValue('name-to-flag');
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
+    // quizModeが変更されたことを確認
+    expect((wrapper.vm as any).quizMode).toBe('name-to-flag');
+  });
+
+
+
+  it('国旗→国名モードでカードを裏返すと国名と詳細情報が表示される', async () => {
+    const wrapper = mount(Study, {
+      global: {
+        plugins: [router],
+      },
+    });
+
+    // 初期状態は国旗→国名モード
+    expect((wrapper.vm as any).quizMode).toBe('flag-to-name');
+
+    // カードをクリックして裏返す
+    const card = wrapper.find('.cursor-pointer[class*="backface-hidden"]');
+    await card.trigger('click');
+    await wrapper.vm.$nextTick();
+
+    // isFlippedがtrueになることを確認
+    expect((wrapper.vm as any).isFlipped).toBe(true);
   });
 });

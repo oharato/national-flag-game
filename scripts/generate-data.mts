@@ -183,7 +183,7 @@ const getFlagDescription = async (countryName: string, lang: 'ja' | 'en'): Promi
     if (pageId !== '-1') {
       const extract = pages[pageId]?.extract;
       if (extract && extract.length > 50) {
-        return extract.substring(0, 500) + (extract.length > 500 ? '...' : '');
+        return extract;
       }
     }
   } catch (e: any) {
@@ -232,7 +232,7 @@ const getCountryDataFromWiki = async (
   lang: 'ja' | 'en'
 ): Promise<Partial<CountryData> | null> => {
   const apiUrl = lang === 'ja' ? 'https://ja.wikipedia.org/w/api.php' : 'https://en.wikipedia.org/w/api.php';
-  const wikiInstance = wiki({ apiUrl });
+  const wikiInstance = wiki({ apiUrl }) as any;
 
   try {
     const page = await wikiInstance.page(countryName);
@@ -337,7 +337,7 @@ const getCountryDataFromWiki = async (
     let description = '';
     try {
       const sections = await page.sections();
-      const flagSection = sections.find(s => s.title.toLowerCase().includes('flag') || s.title.toLowerCase().includes('design') || s.title === '国旗');
+      const flagSection = sections.find((s: any) => s.title.toLowerCase().includes('flag') || s.title.toLowerCase().includes('design') || s.title === '国旗');
       if (flagSection) {
         try {
           const sectionContent = await page.section(flagSection.title);
@@ -354,8 +354,8 @@ const getCountryDataFromWiki = async (
       name: countryName,
       capital: capital,
       flag_image_url: flagImageUrlWiki,
-      description: description ? description.substring(0, 500) + (description.length > 500 ? '...' : '') : '',
-      summary: summary ? summary.substring(0, 300) + (summary.length > 300 ? '...' : '') : '',
+      description: description || '',
+      summary: summary || '',
     };
   } catch (error: any) {
     if (error.message.includes('No article found')) {
@@ -418,17 +418,17 @@ const main = async () => {
     }
 
     // 英語データを取得 (日本語名から英語ページを推測)
-    let countryNameEn = dataJaTmp.name; // 日本語版で取得した英語名があればそれを使う
+    let countryNameEn = dataJaTmp.name || countryNameJa; // 日本語版で取得した英語名があればそれを使う
     if (countryNameEn === countryNameJa) { // 英語名が日本語名と同じなら、英語版Wikipediaで検索しやすい名前に変換を試みる
       try {
-        const jaPage = await wiki({ apiUrl: 'https://ja.wikipedia.org/w/api.php' }).page(countryNameJa);
-        const langlinks = await jaPage.langlinks();
-        const enLink = langlinks.find(link => link.lang === 'en');
+        const jaPageInstance = await (wiki({ apiUrl: 'https://ja.wikipedia.org/w/api.php' }) as any).page(countryNameJa);
+        const langlinks = await jaPageInstance.langlinks();
+        const enLink = langlinks.find((link: any) => link.lang === 'en');
         if (enLink) {
           countryNameEn = enLink.title;
         } else {
           // 言語間リンクが見つからない場合は、元のロジックで検索を試みる
-          const enPageSearch = await wiki({ apiUrl: 'https://en.wikipedia.org/w/api.php' }).search(countryNameJa, 1);
+          const enPageSearch = await (wiki({ apiUrl: 'https://en.wikipedia.org/w/api.php' }) as any).search(countryNameJa, 1);
           if (enPageSearch.results.length > 0) {
             countryNameEn = enPageSearch.results[0];
           }
@@ -436,7 +436,7 @@ const main = async () => {
       } catch (error: any) {
         console.warn(`  - Error getting langlinks for "${countryNameJa}":`, error.message);
         // エラーが発生した場合も元のロジックで検索を試みる
-        const enPageSearch = await wiki({ apiUrl: 'https://en.wikipedia.org/w/api.php' }).search(countryNameJa, 1);
+        const enPageSearch = await (wiki({ apiUrl: 'https://en.wikipedia.org/w/api.php' }) as any).search(countryNameJa, 1);
         if (enPageSearch.results.length > 0) {
           countryNameEn = enPageSearch.results[0];
         }
@@ -455,7 +455,7 @@ const main = async () => {
     }
 
     // 国旗画像をダウンロード
-    const localFlagPath = await downloadImage(dataEn.flag_image_url || dataJa.flag_image_url, countryId);
+    const localFlagPath = await downloadImage((dataEn?.flag_image_url || dataJa?.flag_image_url) || '', countryId);
     if (!localFlagPath) {
       console.warn(`  - Skipping ${countryNameJa} (Flag image not found/downloaded).`);
       continue;
@@ -464,15 +464,15 @@ const main = async () => {
     // 追加データの取得（エラーが発生しても処理を続行）
     let mapImageUrl = '';
     let localMapPath = '';
-    let descriptionJa = dataJa.description || '';
-    let descriptionEn = dataEn.description || '';
+    let descriptionJa = dataJa?.description || '';
+    let descriptionEn = dataEn?.description || '';
 
     // 首都をWikidataから取得（最も正確）
-    let capitalJa = dataJa.capital || '';
-    let capitalEn = dataEn.capital || '';
+    let capitalJa = dataJa?.capital || '';
+    let capitalEn = dataEn?.capital || '';
     try {
-      const capitalFromWikidataJa = await getCapitalFromWikidata(countryNameEn, 'ja');
-      const capitalFromWikidataEn = await getCapitalFromWikidata(countryNameEn, 'en');
+      const capitalFromWikidataJa = await getCapitalFromWikidata(countryNameEn as string, 'ja');
+      const capitalFromWikidataEn = await getCapitalFromWikidata(countryNameEn as string, 'en');
       
       if (capitalFromWikidataJa) {
         capitalJa = capitalFromWikidataJa;
@@ -491,8 +491,8 @@ const main = async () => {
     let continentJa = 'N/A';
     let continentEn = 'N/A';
     try {
-      const continentFromWikidataJa = await getContinentFromWikidata(countryNameEn, 'ja');
-      const continentFromWikidataEn = await getContinentFromWikidata(countryNameEn, 'en');
+      const continentFromWikidataJa = await getContinentFromWikidata(countryNameEn as string, 'ja');
+      const continentFromWikidataEn = await getContinentFromWikidata(countryNameEn as string, 'en');
       
       if (continentFromWikidataJa) {
         continentJa = continentFromWikidataJa;
@@ -508,15 +508,17 @@ const main = async () => {
 
     // 地図画像を取得してダウンロード（英語版を優先）
     try {
-      const mapImageEn = await getMapImageFromInfobox(countryNameEn, 'en');
-      if (mapImageEn) {
-        mapImageUrl = mapImageEn;
-        console.log(`  ✓ Map image found`);
-      } else {
-        const mapImageJa = await getMapImageFromInfobox(countryNameJa, 'ja');
-        if (mapImageJa) {
-          mapImageUrl = mapImageJa;
-          console.log(`  ✓ Map image found (ja)`);
+      if (countryNameEn) {
+        const mapImageEn = await getMapImageFromInfobox(countryNameEn as string, 'en');
+        if (mapImageEn) {
+          mapImageUrl = mapImageEn;
+          console.log(`  ✓ Map image found`);
+        } else if (countryNameJa) {
+          const mapImageJa = await getMapImageFromInfobox(countryNameJa as string, 'ja');
+          if (mapImageJa) {
+            mapImageUrl = mapImageJa;
+            console.log(`  ✓ Map image found (ja)`);
+          }
         }
       }
 
@@ -533,16 +535,16 @@ const main = async () => {
 
     // 国旗の説明を専用ページから取得（既存のdescriptionが空または短い場合）
     try {
-      if (!descriptionJa || descriptionJa.length < 50) {
-        const flagDescJa = await getFlagDescription(countryNameJa, 'ja');
+      if ((!descriptionJa || descriptionJa.length < 50) && countryNameJa) {
+        const flagDescJa = await getFlagDescription(countryNameJa as string, 'ja');
         if (flagDescJa && flagDescJa.length > descriptionJa.length) {
           descriptionJa = flagDescJa;
           console.log(`  ✓ Flag description (ja): ${flagDescJa.length} chars`);
         }
       }
 
-      if (!descriptionEn || descriptionEn.length < 50) {
-        const flagDescEn = await getFlagDescription(countryNameEn, 'en');
+      if ((!descriptionEn || descriptionEn.length < 50) && countryNameEn) {
+        const flagDescEn = await getFlagDescription(countryNameEn as string, 'en');
         if (flagDescEn && flagDescEn.length > descriptionEn.length) {
           descriptionEn = flagDescEn;
           console.log(`  ✓ Flag description (en): ${flagDescEn.length} chars`);
@@ -561,18 +563,18 @@ const main = async () => {
       flag_image_url: localFlagPath,
       map_image_url: localMapPath,
       description: descriptionJa,
-      summary: dataJa.summary,
+      summary: dataJa?.summary || '',
     };
 
     const finalDataEn: CountryData = {
       id: countryId,
-      name: dataEn.name, // 英語名
+      name: (dataEn?.name || countryNameEn) as string, // 英語名
       capital: capitalEn,
       continent: continentEn,
       flag_image_url: localFlagPath,
       map_image_url: localMapPath,
       description: descriptionEn,
-      summary: dataEn.summary,
+      summary: dataEn?.summary || '',
     };
 
     // 既存データから同じIDの国を探して更新、なければ追加
@@ -588,10 +590,10 @@ const main = async () => {
     const existingEnIndex = allDataEn.findIndex(c => c.id === countryId);
     if (existingEnIndex >= 0) {
       allDataEn[existingEnIndex] = finalDataEn;
-      console.log(`  ✓ Updated ${dataEn.name} in countries.en.json`);
+      console.log(`  ✓ Updated ${(dataEn?.name || countryNameEn) as string} in countries.en.json`);
     } else {
       allDataEn.push(finalDataEn);
-      console.log(`  ✓ Added ${dataEn.name} to countries.en.json`);
+      console.log(`  ✓ Added ${(dataEn?.name || countryNameEn) as string} to countries.en.json`);
     }
 
     // 各国処理後にファイルに保存

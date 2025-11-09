@@ -33,6 +33,18 @@
 - [Vue Router](https://router.vuejs.org/)
 - [Tailwind CSS](https://tailwindcss.com/)
 
+### アーキテクチャ
+- **再利用可能コンポーネント**: DRY原則に基づいた設計
+  - 共通UIコンポーネント: LanguageSelector, LoadingSpinner, ErrorMessage, AppButton
+  - クイズ設定コンポーネント: RegionSelector, QuizFormatSelector
+  - 学習用コンポーネント: FlagCard, CountryDetailCard
+- **レスポンシブデザイン**: モバイルファーストの設計
+  - スマホとPCで最適化された異なるレイアウト
+  - ランキング: PC版はテーブル、スマホ版はカード形式
+  - フォーム: 画面サイズに応じた適切なサイズとスペーシング
+  - バリデーションエラーの画面内表示
+- **CI/CD**: GitHub Actions による自動テスト・デプロイパイプライン
+
 ### バックエンド
 - [Hono](https://hono.dev/)
 - [Cloudflare Pages Functions](https://developers.cloudflare.com/pages/functions/)
@@ -115,23 +127,27 @@ npm run test:coverage
 ```
 
 ### テストカバレッジ
-✅ **95テスト、100%合格率**
+✅ **102テスト、100%合格率**
 
 - **ストアのテスト** (32テスト)
   - Countries Store: データ取得、言語切り替え、フィルタリング (14テスト)
   - Quiz Store: クイズ設定、問題生成、回答処理、スコア計算 (11テスト)
   - Ranking Store: ランキング取得、スコア送信 (7テスト)
 
-- **コンポーネントのテスト** (37テスト)
+- **コンポーネントのテスト** (44テスト)
   - Home: 言語選択、ナビゲーション (8テスト)
   - QuizSetup: 入力バリデーション、XSS対策、localStorage連携 (14テスト)
-  - Study: カード操作、地域フィルタリング、キーボードショートカット (15テスト)
+  - Study: カード操作、地域フィルタリング、キーボードショートカット (22テスト)
 
 - **ユーティリティのテスト** (16テスト)
   - バリデーション: ニックネーム検証、セキュリティチェック、XSS対策
 
 - **APIのテスト** (10テスト)
   - Server: スコア計算、入力検証、セキュリティチェック
+
+### CI/CD統合
+- GitHub Actions による自動テスト実行（プルリクエスト時）
+- テスト成功後の自動デプロイ（main/master ブランチへのマージ時）
 
 詳細は [テスト仕様書](./docs/06_test_specification.md) を参照してください。
 
@@ -192,9 +208,13 @@ https://[deployment-id].national-flag-game.pages.dev
 
 この URL にアクセスしてアプリケーションの動作を確認してください。
 
-### GitHub Actions による自動デプロイ
+### GitHub Actions による自動テスト・デプロイ
 
-main/master ブランチへのプッシュで自動的にデプロイされます。
+#### CI/CDパイプライン
+1. **プルリクエスト時**: 自動的にテストを実行（マージ前の品質チェック）
+2. **main/master ブランチへのマージ時**: テスト成功後に自動デプロイ
+
+このワークフローにより、コードの品質を保ちながら安全にデプロイできます。
 
 #### 初回設定（GitHub Secrets）
 

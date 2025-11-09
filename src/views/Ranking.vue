@@ -2,26 +2,22 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useRankingStore, type RankingType, type QuizFormat } from '../store/ranking';
+import RegionSelector from '../components/RegionSelector.vue';
+import QuizFormatSelector from '../components/QuizFormatSelector.vue';
+import LoadingSpinner from '../components/LoadingSpinner.vue';
+import ErrorMessage from '../components/ErrorMessage.vue';
+import { useTranslation } from '../composables/useTranslation';
+import { formatDateTime } from '../utils/formatters';
 
 const route = useRoute();
 const router = useRouter();
 const rankingStore = useRankingStore();
+const { t } = useTranslation();
 
-// URLパラメータから初期値を取得、なければストアまたはデフォルト値を使用
+// URLパラメータから初期値を取得
 const selectedRegion = ref((route.query.region as string) || rankingStore.currentRegion || 'all');
 const selectedType = ref<RankingType>((route.query.type as RankingType) || rankingStore.currentType || 'daily');
 const selectedFormat = ref<QuizFormat>((route.query.format as QuizFormat) || rankingStore.currentFormat || 'flag-to-name');
-
-// 大陸リスト
-const regions = [
-  { value: 'all', label: '全世界' },
-  { value: 'Africa', label: 'アフリカ' },
-  { value: 'Asia', label: 'アジア' },
-  { value: 'Europe', label: 'ヨーロッパ' },
-  { value: 'North America', label: '北アメリカ' },
-  { value: 'South America', label: '南アメリカ' },
-  { value: 'Oceania', label: 'オセアニア' },
-];
 
 onMounted(() => {
   rankingStore.fetchRanking(selectedRegion.value, selectedType.value, selectedFormat.value);
@@ -36,7 +32,6 @@ onUnmounted(() => {
 watch([selectedRegion, selectedType, selectedFormat], () => {
   rankingStore.fetchRanking(selectedRegion.value, selectedType.value, selectedFormat.value);
   
-  // URLパラメータを更新（履歴には残さない）
   router.replace({
     path: '/ranking',
     query: {
@@ -46,101 +41,97 @@ watch([selectedRegion, selectedType, selectedFormat], () => {
     }
   });
 });
-
-// 日時をフォーマット
-const formatDateTime = (dateStr: string) => {
-  const date = new Date(dateStr);
-  return date.toLocaleString('ja-JP', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
 </script>
 
 <template>
   <div class="container mx-auto p-4 max-w-4xl">
-    <router-link to="/" class="text-blue-500 hover:underline">&lt; トップページに戻る</router-link>
-    <h2 class="text-3xl font-bold my-6 text-center">ランキング</h2>
+    <router-link to="/" class="text-blue-500 hover:underline">{{ t.common.backToHome }}</router-link>
+    <h2 class="text-3xl font-bold my-6 text-center">{{ t.ranking.title }}</h2>
 
     <!-- 地域選択、表示タイプ選択、形式選択 -->
-    <div class="flex flex-col md:flex-row gap-4 mb-6 bg-white p-4 rounded-lg shadow">
+    <div class="flex flex-col md:flex-row gap-2 md:gap-4 mb-6 bg-white p-3 md:p-4 rounded-lg shadow">
       <div class="flex-1">
-        <label for="region" class="block text-sm font-medium text-gray-700 mb-1">地域</label>
-        <select
-          id="region"
-          v-model="selectedRegion"
-          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          <option v-for="region in regions" :key="region.value" :value="region.value">
-            {{ region.label }}
-          </option>
-        </select>
+        <RegionSelector v-model="selectedRegion" :label="t.ranking.region" />
       </div>
       <div class="flex-1">
-        <label for="type" class="block text-sm font-medium text-gray-700 mb-1">表示</label>
+        <label for="type" class="hidden md:block text-sm font-medium text-gray-700 mb-1">{{ t.ranking.display }}</label>
         <select
           id="type"
           v-model="selectedType"
-          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          class="w-full px-2 py-1.5 md:px-3 md:py-2 text-sm md:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
-          <option value="daily">今日のランキング</option>
-          <option value="all_time">歴代トップ5</option>
+          <option value="daily">{{ t.ranking.dailyRanking }}</option>
+          <option value="all_time">{{ t.ranking.allTimeTop5 }}</option>
         </select>
       </div>
       <div class="flex-1">
-        <label for="format" class="block text-sm font-medium text-gray-700 mb-1">クイズ形式</label>
-        <select
-          id="format"
-          v-model="selectedFormat"
-          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          <option value="flag-to-name">国旗 → 国名</option>
-          <option value="name-to-flag">国名 → 国旗</option>
-        </select>
+        <QuizFormatSelector v-model="selectedFormat" :label="t.ranking.quizFormat" />
       </div>
     </div>
 
-    <div v-if="rankingStore.loading" class="text-center">
-      <p>ランキングを読み込み中...</p>
-    </div>
-    <div v-else-if="rankingStore.error" class="text-center text-red-500">
-      <p>{{ rankingStore.error }}</p>
-    </div>
-    <div v-else-if="rankingStore.ranking.length > 0" class="overflow-x-auto">
-      <table class="min-w-full bg-white border border-gray-300">
-        <thead class="bg-gray-100">
-          <tr>
-            <th class="py-3 px-6 text-left text-lg font-medium text-gray-600">順位</th>
-            <th class="py-3 px-6 text-left text-lg font-medium text-gray-600">ニックネーム</th>
-            <th class="py-3 px-6 text-left text-lg font-medium text-gray-600">スコア</th>
-            <th class="py-3 px-6 text-left text-lg font-medium text-gray-600">登録日時</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="item in rankingStore.ranking"
-            :key="item.rank"
-            class="border-b"
-            :class="{ 'bg-yellow-200': rankingStore.myRank && rankingStore.myRank.nickname === item.nickname && rankingStore.myRank.score === item.score }"
-          >
-            <td class="py-4 px-6 text-xl font-bold">
-              <span v-if="item.rank === 1">🥇</span>
-              <span v-else-if="item.rank === 2">🥈</span>
-              <span v-else-if="item.rank === 3">🥉</span>
-              <span v-else>{{ item.rank }}</span>
-            </td>
-            <td class="py-4 px-6 text-lg">{{ item.nickname }}</td>
-            <td class="py-4 px-6 text-lg font-semibold">{{ item.score }} pt</td>
-            <td class="py-4 px-6 text-sm text-gray-600">{{ formatDateTime(item.created_at) }}</td>
-          </tr>
-        </tbody>
-      </table>
+    <LoadingSpinner v-if="rankingStore.loading" :message="t.ranking.loading" />
+    <ErrorMessage v-else-if="rankingStore.error" :message="rankingStore.error" />
+    <div v-else-if="rankingStore.ranking.length > 0">
+      <!-- デスクトップ: テーブル表示 -->
+      <div class="hidden md:block overflow-x-auto">
+        <table class="min-w-full bg-white border border-gray-300">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="py-3 px-6 text-left text-lg font-medium text-gray-600">{{ t.ranking.rank }}</th>
+              <th class="py-3 px-6 text-left text-lg font-medium text-gray-600">{{ t.ranking.nicknameLabel }}</th>
+              <th class="py-3 px-6 text-left text-lg font-medium text-gray-600">{{ t.ranking.scoreLabel }}</th>
+              <th class="py-3 px-6 text-left text-lg font-medium text-gray-600">{{ t.ranking.registeredAt }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="item in rankingStore.ranking"
+              :key="item.rank"
+              class="border-b"
+              :class="{ 'bg-yellow-200': rankingStore.myRank && rankingStore.myRank.nickname === item.nickname && rankingStore.myRank.score === item.score }"
+            >
+              <td class="py-4 px-6 text-xl font-bold">
+                <span v-if="item.rank === 1">🥇</span>
+                <span v-else-if="item.rank === 2">🥈</span>
+                <span v-else-if="item.rank === 3">🥉</span>
+                <span v-else class="pl-2">{{ item.rank }}</span>
+              </td>
+              <td class="py-4 px-6 text-lg">{{ item.nickname }}</td>
+              <td class="py-4 px-6 text-lg font-semibold">{{ item.score }} pt</td>
+              <td class="py-4 px-6 text-sm text-gray-600">{{ formatDateTime(item.created_at) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- モバイル: カード表示 -->
+      <div class="md:hidden space-y-3">
+        <div
+          v-for="item in rankingStore.ranking"
+          :key="item.rank"
+          class="bg-white p-3 rounded-lg shadow border border-gray-200"
+          :class="{ 'bg-yellow-100 border-yellow-400': rankingStore.myRank && rankingStore.myRank.nickname === item.nickname && rankingStore.myRank.score === item.score }"
+        >
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <span class="text-2xl font-bold">
+                <span v-if="item.rank === 1">🥇</span>
+                <span v-else-if="item.rank === 2">🥈</span>
+                <span v-else-if="item.rank === 3">🥉</span>
+                <span v-else class="pl-3 pr-2 text-gray-600">{{ item.rank }}</span>
+              </span>
+              <span class="text-lg font-semibold">{{ item.nickname }}</span>
+            </div>
+            <span class="text-xl font-bold text-indigo-600">{{ item.score }}</span>
+          </div>
+          <div class="text-xs text-gray-500">
+            {{ formatDateTime(item.created_at) }}
+          </div>
+        </div>
+      </div>
     </div>
     <div v-else class="text-center">
-      <p>まだランキングデータがありません。</p>
+      <p>{{ t.ranking.noData }}</p>
     </div>
   </div>
 </template>

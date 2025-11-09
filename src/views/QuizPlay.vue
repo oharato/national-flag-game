@@ -3,11 +3,16 @@ import { onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuizStore } from '../store/quiz';
 import { useCountriesStore } from '../store/countries';
+import { useTranslation } from '../composables/useTranslation';
 import type { Country } from '../store/countries';
+import LoadingSpinner from '../components/LoadingSpinner.vue';
+import ErrorMessage from '../components/ErrorMessage.vue';
+import AppButton from '../components/AppButton.vue';
 
 const router = useRouter();
 const quizStore = useQuizStore();
 const countriesStore = useCountriesStore();
+const { t } = useTranslation();
 
 const elapsedTime = ref(0);
 let timer: number;
@@ -198,39 +203,39 @@ const handleMouseEnter = (index: number) => {
 
 <template>
   <div class="container mx-auto p-4 max-w-3xl">
-    <div v-if="countriesStore.loading" class="text-center py-10">
-      <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
-      <p>データを読み込み中...</p>
-    </div>
+    <LoadingSpinner 
+      v-if="countriesStore.loading" 
+      full-screen 
+    />
 
-    <div v-else-if="countriesStore.error" class="text-center py-10 text-red-500">
-      <p>データの読み込みに失敗しました: {{ countriesStore.error }}</p>
-      <button @click="countriesStore.fetchCountries(true)" class="mt-4 bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-        再試行
-      </button>
-    </div>
+    <ErrorMessage
+      v-else-if="countriesStore.error"
+      :message="`${t.quizPlay.loadError}: ${countriesStore.error}`"
+      retryable
+      @retry="countriesStore.fetchCountries(true)"
+    />
 
     <div v-else-if="quizStore.currentQuestion">
       <div class="flex justify-between items-center mb-6">
         <div class="text-xl font-bold">
-          問題 {{ quizStore.currentQuestionIndex + 1 }} / {{ quizStore.questions.length }}
+          {{ t.quizPlay.question }} {{ quizStore.currentQuestionIndex + 1 }} / {{ quizStore.questions.length }}
         </div>
         <div class="text-xl font-bold">
-          経過時間: {{ elapsedTime }}秒
+          {{ t.quizPlay.elapsedTime }}: {{ elapsedTime }}{{ t.quizPlay.seconds }}
         </div>
       </div>
 
       <div class="text-center p-8 border-2 border-gray-300 rounded-lg shadow-lg bg-gray-100 min-h-[200px] flex items-center justify-center relative">
         <!-- ローディングスピナー -->
         <div v-if="!imagesLoaded" class="absolute inset-0 flex items-center justify-center bg-gray-100 bg-opacity-75 z-10">
-          <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+          <LoadingSpinner message="" />
         </div>
         
         <!-- 国旗を見て国名を選ぶ場合 -->
         <img
           v-if="quizStore.quizFormat === 'flag-to-name'"
           :src="quizStore.currentQuestion.correctAnswer.flag_image_url"
-          :alt="`国旗`"
+          :alt="t.quizPlay.flagAlt"
           class="max-h-48 object-contain"
           loading="eager"
           fetchpriority="high"
@@ -276,10 +281,10 @@ const handleMouseEnter = (index: number) => {
       </div>
     </div>
     <div v-else class="text-center py-10">
-      <p>クイズデータがありません。設定画面に戻ってください。</p>
-      <button @click="router.push('/quiz')" class="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-        クイズ設定へ
-      </button>
+      <p>{{ t.quizPlay.noData }}</p>
+      <AppButton variant="primary" @click="router.push('/quiz')" class="mt-4">
+        {{ t.quizPlay.goToSetup }}
+      </AppButton>
     </div>
   </div>
 </template>
