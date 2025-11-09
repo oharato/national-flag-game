@@ -4,6 +4,7 @@ import { useCountriesStore } from '../store/countries';
 import type { Country } from '../store/countries';
 import FlagCard from '../components/FlagCard.vue';
 import CountryDetailCard from '../components/CountryDetailCard.vue';
+import LazyImage from '../components/LazyImage.vue';
 import { useTranslation } from '../composables/useTranslation';
 
 const countriesStore = useCountriesStore();
@@ -227,10 +228,11 @@ const goToCountry = (index: number) => {
             }"
             class="cursor-pointer rounded overflow-hidden hover:shadow-lg transition-shadow bg-gray-100 flex items-center justify-center p-1 box-border"
           >
-            <img
+            <LazyImage
               v-if="quizMode === 'flag-to-name'"
               :src="country.flag_image_url"
               :alt="country.name"
+              :eager="index === currentIndex"
               class="w-full h-full object-contain aspect-square"
             />
             <span

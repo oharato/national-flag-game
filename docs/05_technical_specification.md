@@ -155,6 +155,12 @@
    - 国名、首都、大陸、地図、説明の表示
    - スクロール可能な説明文エリア
 
+9. **LazyImage.vue** - 遅延読み込み画像コンポーネント
+   - Intersection Observer API を使用した画像の遅延読み込み
+   - ビューポートに入る50px手前から読み込み開始
+   - 読み込み完了時のフェードイン効果
+   - eagerオプションで即座読み込みもサポート
+
 #### 学習モード (Study.vue)
 *   **機能**:
     *   クイズ形式選択: 国旗→国名 / 国名→国旗
@@ -199,6 +205,12 @@
 *   **画像優先読み込み**: `loading="eager"` と `fetchpriority="high"` 属性で即座に読み込み
 *   **ビルド最適化**: `assetsInlineLimit: 0` でブラウザキャッシュを最大活用
 *   **ローディング状態管理**: 画像読み込み完了まで選択肢を無効化
+*   **遅延読み込み**: Intersection Observer API による画像の効率的な読み込み
+*   **Service Worker**: Workbox によるオフライン対応とキャッシュ戦略
+    *   国旗・地図画像: CacheFirst（30日間キャッシュ）
+    *   JSON データ: StaleWhileRevalidate（24時間キャッシュ）
+    *   自動更新: registerType 'autoUpdate' で新バージョンを自動適用
+*   **PWA対応**: manifest.webmanifest でホーム画面追加とスタンドアロン動作をサポート
 
 #### レスポンシブデザイン
 *   **モバイルファースト**: スマホ表示を優先したUI設計

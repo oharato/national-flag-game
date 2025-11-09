@@ -1,4 +1,13 @@
-import { beforeEach, afterEach } from 'vitest';
+import { beforeEach, afterEach, vi } from 'vitest';
+
+// IntersectionObserver のグローバルモック
+if (typeof IntersectionObserver === 'undefined') {
+  global.IntersectionObserver = class IntersectionObserver {
+    observe = vi.fn();
+    unobserve = vi.fn();
+    disconnect = vi.fn();
+  } as any;
+}
 
 const originalConsoleError = console.error;
 const originalConsoleWarn = console.warn;

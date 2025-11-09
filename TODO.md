@@ -168,9 +168,9 @@
 
 ## 今後の改善候補
 
-- [ ] パフォーマンス最適化
-    - [ ] 画像の遅延読み込み（Intersection Observer API）
-    - [ ] Service Worker によるオフライン対応
+- [x] パフォーマンス最適化
+    - [x] 画像の遅延読み込み（Intersection Observer API）
+    - [x] Service Worker によるオフライン対応
 - [ ] 機能拡張
     - [ ] ユーザー登録・ログイン機能
     - [ ] 学習進捗の記録・可視化
