@@ -89,6 +89,7 @@ export interface Translations {
     continent: string;
     flagOrigin: string;
     summary: string;
+    noInformation: string;
     keyboardHint: string;
     next: string;
     prev: string;
@@ -199,6 +200,7 @@ export const translations: Record<Language, Translations> = {
       continent: '大陸',
       flagOrigin: '国旗の由来',
       summary: '概要',
+      noInformation: '情報がありません',
       keyboardHint: '矢印キーで移動、スペースキーで表裏切り替え',
       next: '次へ →',
       prev: '← 前へ',
@@ -307,6 +309,7 @@ export const translations: Record<Language, Translations> = {
       continent: 'Continent',
       flagOrigin: 'Flag Origin',
       summary: 'Summary',
+      noInformation: 'No information available',
       keyboardHint: 'Arrow keys to navigate, Space to flip',
       next: 'Next →',
       prev: '← Prev',
