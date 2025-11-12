@@ -16,11 +16,11 @@ withDefaults(defineProps<Props>(), {
 });
 
 const variantClasses = {
-  primary: 'bg-blue-500 hover:bg-blue-700',
+  primary: 'bg-blue-600 hover:bg-blue-700',
   secondary: 'bg-indigo-600 hover:bg-indigo-700',
-  success: 'bg-green-500 hover:bg-green-700',
+  success: 'bg-green-700 hover:bg-green-800',
   danger: 'bg-red-500 hover:bg-red-700',
-  purple: 'bg-purple-500 hover:bg-purple-700',
+  purple: 'bg-purple-700 hover:bg-purple-800',
   gray: 'bg-gray-500 hover:bg-gray-700',
 };
 
