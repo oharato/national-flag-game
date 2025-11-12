@@ -169,6 +169,17 @@
     - [x] 05_technical_specification.md: データベーススキーマとマイグレーション管理の更新
     - [x] 08_github_actions.md: D1マイグレーション自動実行の追加、トラブルシューティング拡充
 
+## フェーズ8: データ生成の自動化
+
+- [x] 8.1. GitHub Actions ワークフローの作成
+    - [x] update-data.yml の作成
+    - [x] 手動実行（workflow_dispatch）のサポート
+    - [x] スケジュール実行（毎週日曜日）の設定
+    - [x] generate-data.mts の自動実行
+    - [x] public/ ディレクトリの変更を自動コミット
+    - [x] コミットメッセージ形式: "update by gha on {datetime}"
+    - [x] 自動デプロイの統合
+
 ## 今後の改善候補
 
 - [x] パフォーマンス最適化

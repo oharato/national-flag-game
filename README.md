@@ -74,6 +74,229 @@ Wikipedia と Wikidata から国旗や国の情報を取得し、アプリケー
  ```
  ... (truncated for brevity in this query; update uses full README content) ...
 
+2.  **国データの生成と画像ダウンロード**
+  ```bash
+  npm run batch:create-data
+  ```
+    各国について以下の情報を取得します：
+    - 国旗画像（`public/flags/` にダウンロード）
+    - 地図画像（`public/maps/` にダウンロード）
+    - 首都（Wikidata P36 から取得、言語別ラベル）
+    - 大陸（まずWikipediaのカテゴリHTMLから取得、失敗時はWikidata P30にフォールバック）
+      - カテゴリパターン: 日本語版 `Category:〇〇の国`、英語版 `Countries in 〇〇`
+      - 複数の大陸カテゴリに属する国（オーストラリア、パナマなど）に対応するため優先順位を設定
+    - 概要（Wikipedia の要約セクション）
+    - 国旗の由来（日本語版は「[国名]の国旗」ページ、英語版は日本語ページ内のリンクから自動検出）
+    
+    処理は各国ごとに保存されるため、中断しても再実行時に続きから再開できます。
+    
+    **特定の国のみ更新する場合**:
+    ```bash
+    npm run batch:create-data "アメリカ"
+    ```
+    国名の一部を指定することで、その国のみデータを更新できます。
+    
+    **英語版の国旗の由来取得について**:
+    英語版では、日本語Wikipediaページ内の `https://en.wikipedia.org/wiki/Flag_of` で始まるリンクを自動的に検出して取得します。
+    これにより、国名のバリエーション（"the", "Republic of" など）を気にすることなく、正確な英語版国旗ページにアクセスできます。
+
+### 3. データベースのセットアップ
+ローカルのD1データベースにテーブルを作成します。
+
+```bash
+npx wrangler d1 migrations apply world-flags-learning-db --local
+```
+初回実行時に確認を求められた場合は `Y` を入力してください。
+
+このコマンドで以下のテーブルが作成されます：
+- `ranking_daily`: 日次ランキング（nickname, region, format, date ごとに UNIQUE）
+- `ranking_all_time`: 全期間ランキング（region と format ごとのベストスコア）
+
+### 4. 開発サーバーの起動
+フロントエンド（Vite）とバックエンド（Wrangler）の開発サーバーを同時に起動します。
+
+```bash
+npm run dev
+```
+起動後、ブラウザで `http://localhost:5173` にアクセスしてください。
+
+## 🧪 テスト
+
+このプロジェクトでは [Vitest](https://vitest.dev/) を使用して包括的なテストを実行します。
+
+### テストの実行
+```bash
+# 全テストを実行（ウォッチモード）
+npm test
+
+# 全テストを1回だけ実行
+npm run test:run
+
+# UIでテストを実行
+npm run test:ui
+
+# カバレッジレポート付きでテストを実行
+npm run test:coverage
+```
+
+### コード品質チェック
+
+このプロジェクトでは [Biome](https://biomejs.dev/) を使用した高速なリンティングとフォーマットを行っています。
+
+```bash
+# コードのリントチェック
+npm run lint
+
+# リンターのエラーを自動修正
+npm run lint:fix
+
+# コードのフォーマット
+npm run format
+```
+
+### テストカバレッジ
+✅ **113テスト、100%合格率**
+
+- **ストアのテスト** (32テスト)
+  - Countries Store: データ取得、言語切り替え、フィルタリング (14テスト)
+  - Quiz Store: クイズ設定、問題生成、回答処理、スコア計算 (11テスト)
+  - Ranking Store: ランキング取得、スコア送信 (7テスト)
+
+- **コンポーネントのテスト** (55テスト)
+  - Home: 言語選択、ナビゲーション (8テスト)
+  - QuizSetup: 入力バリデーション、XSS対策、localStorage連携 (14テスト)
+  - Study: カード操作、地域フィルタリング、キーボードショートカット (22テスト)
+  - LazyImage: 遅延読み込み、Intersection Observer API、画像ロード (11テスト)
+
+- **ユーティリティのテスト** (16テスト)
+  - バリデーション: ニックネーム検証、セキュリティチェック、XSS対策
+
+- **APIのテスト** (10テスト)
+  - Server: スコア計算、入力検証、セキュリティチェック
+
+### CI/CD統合
+- GitHub Actions による自動テスト実行（プルリクエスト時）
+- テスト成功後の自動デプロイ（main/master ブランチへのマージ時）
+
+詳細は [テスト仕様書](./docs/06_test_specification.md) を参照してください。
+
+## 🎨 開発ワークフロー
+
+### Pre-commit Hooks
+
+このプロジェクトでは、コミット前に自動的にコード品質チェックとフォーマットを実行します。
+
+- **自動実行**: `git commit` すると、ステージングされたファイルに対して自動的にBiomeが実行されます
+- **自動修正**: リンターが検出した問題は自動的に修正されます
+- **エラー防止**: エラーがある場合、コミットはブロックされます
+
+詳細は [Pre-commit Hooks 設定ガイド](./docs/09_pre_commit_hooks.md) を参照してください。
+
+#### 手動でのコード品質チェック
+
+```bash
+# リンターチェック
+npm run lint
+
+# リンターの自動修正
+npm run lint:fix
+
+# フォーマット
+npm run format
+```
+
+## 🚀 本番環境へのデプロイ
+
+このアプリケーションは Cloudflare Pages にデプロイされます。
+
+### デプロイ手順
+
+#### 1. Cloudflare にログイン
+```bash
+npx wrangler login
+```
+
+#### 2. D1 データベースの作成（初回のみ）
+```bash
+npx wrangler d1 create world-flags-learning-db
+```
+出力された `database_id` を `wrangler.toml` に設定してください。
+
+#### 3. マイグレーションの適用（初回のみ）
+```bash
+npx wrangler d1 migrations apply world-flags-learning-db --remote
+```
+
+#### 4. デプロイ
+```bash
+npm run deploy
+```
+
+#### 5. D1 バインディングの設定（初回のみ）
+Cloudflare ダッシュボードで以下の設定を行います：
+
+1. https://dash.cloudflare.com/ にアクセス
+2. **Workers & Pages** → **world-flags-learning** を選択
+3. **Settings** タブ → **Functions** → **D1 database bindings**
+4. **Add binding** をクリック
+   - Variable name: `DB`
+   - D1 database: `world-flags-learning-db` を選択
+5. **Save** をクリック
+
+### デプロイコマンド
+
+```bash
+# 本番環境へデプロイ（ビルド + デプロイ）
+npm run deploy
+
+# プレビュー環境へデプロイ
+npm run deploy:preview
+```
+
+### デプロイ後の確認
+
+デプロイが完了すると、以下のような URL が表示されます：
+```
+https://[deployment-id].world-flags-learning.pages.dev
+```
+
+この URL にアクセスしてアプリケーションの動作を確認してください。
+
+### GitHub Actions による自動テスト・デプロイ
+
+#### CI/CDパイプライン
+1. **プルリクエスト時**: 自動的にテストを実行（マージ前の品質チェック）
+2. **main/master ブランチへのマージ時**: テスト成功後に自動デプロイ
+3. **国データの自動更新**: 毎週日曜日に自動実行、または手動で実行可能
+
+このワークフローにより、コードの品質を保ちながら安全にデプロイできます。
+
+#### 国データの自動更新
+
+GitHub Actions により、Wikipedia と Wikidata から国データを定期的に更新できます：
+
+**自動実行**: 毎週日曜日 0:00 (UTC) に自動的に実行
+
+**手動実行**:
+1. GitHubリポジトリの **Actions** タブを開く
+2. **Update Country Data** ワークフローを選択
+3. **Run workflow** ボタンをクリック
+
+このワークフローは以下を実行します：
+- `npm run batch:create-data` による国データの生成
+- `public/` ディレクトリの変更を自動コミット（コミットメッセージ: "update by gha on {日時}"）
+- 変更がある場合、自動的に Cloudflare Pages へデプロイ
+
+#### 初回設定（GitHub Secrets）
+
+1. **Cloudflare API トークンを取得**: https://dash.cloudflare.com/profile/api-tokens
+2. **Cloudflare アカウント ID を取得**: `npx wrangler whoami`
+3. **GitHub リポジトリの Settings** → **Secrets and variables** → **Actions**
+4. 以下の2つの Secret を追加:
+   - `CLOUDFLARE_API_TOKEN`: Cloudflare API トークン
+   - `CLOUDFLARE_ACCOUNT_ID`: Cloudflare アカウント ID
+
+詳細は [GitHub Actions 自動デプロイ設定ガイド](./docs/08_github_actions.md) を参照してください。
 
 ## � ディレクトリ構造
 

@@ -1,11 +1,11 @@
 # GitHub Actions 自動テスト・デプロイ設定ガイド
 
 ## 概要
-このガイドでは、GitHub のプルリクエスト作成時およびmain/masterブランチへのマージ時に、自動的にテストを実行し、Cloudflare Pagesへデプロイする設定方法を説明します。
+このガイドでは、GitHub のプルリクエスト作成時およびmain/masterブランチへのマージ時に、自動的にテストを実行し、Cloudflare Pagesへデプロイする設定方法を説明します。また、国データを定期的に更新する自動化ワークフローについても説明します。
 
 ## ワークフローの構成
 
-本プロジェクトでは、以下の2つのGitHub Actionsワークフローを使用しています:
+本プロジェクトでは、以下の3つのGitHub Actionsワークフローを使用しています:
 
 ### 1. テストワークフロー (`.github/workflows/test.yml`)
 **プルリクエスト時のみ**自動実行され、コードレビュー前に品質を確認します。
@@ -38,6 +38,28 @@
    - D1データベースのマイグレーション適用
    - Cloudflare Pagesへのデプロイ
 
+### 3. 国データ更新ワークフロー (`.github/workflows/update-data.yml`)
+**スケジュール実行または手動実行**により、国データを自動的に更新します。
+
+**トリガー**:
+- スケジュール実行: 毎週日曜日 0:00 (UTC)
+- 手動実行: GitHub Actions の UI から実行可能
+
+**実行内容**:
+1. リポジトリのチェックアウト
+2. Node.js 20のセットアップ
+3. 依存関係のインストール
+4. 国データ生成スクリプトの実行 (`npm run batch:create-data`)
+5. 変更の検出と自動コミット（コミットメッセージ: "update by gha on {日時}"）
+6. ビルド（変更がある場合のみ）
+7. D1データベースのマイグレーション適用（変更がある場合のみ）
+8. Cloudflare Pagesへのデプロイ（変更がある場合のみ）
+
+**注意事項**:
+- データ生成には最大90分のタイムアウトが設定されています
+- Wikipedia と Wikidata からデータを取得するため、時間がかかる場合があります
+- 変更がない場合、コミット・ビルド・デプロイはスキップされます
+
 ### ワークフローの役割分担
 
 ```
@@ -53,6 +75,14 @@
    └─ GitHub Actions: deploy.yml実行
       ├─ テスト ✓（最終確認）
       ├─ D1マイグレーション
+      └─ デプロイ → 本番環境更新
+
+データ更新フロー:
+1. 毎週日曜日 or 手動実行
+   └─ GitHub Actions: update-data.yml実行
+      ├─ 国データ生成（Wikipedia/Wikidata から取得）
+      ├─ 自動コミット（"update by gha on {日時}"）
+      ├─ ビルド
       └─ デプロイ → 本番環境更新
 ```
 
@@ -74,6 +104,7 @@
 - **テスト重複の防止**: main/masterへのpush時にテストは1回のみ実行
 - **ブランチ保護**: GitHubのブランチ保護ルールと組み合わせることで、テスト失敗時のマージを防止
 - **多層防御**: ローカルpre-commit → PR時テスト → デプロイ前テストの3段階チェック
+- **データの自動更新**: 定期的または手動で国データを最新の状態に保つことが可能
 
 ## 前提条件
 - GitHub リポジトリが作成済み
@@ -244,7 +275,106 @@ jobs:
 - ビルド後、デプロイ前に自動的にD1データベースのマイグレーションが実行されます
 - 最新の `wrangler pages deploy` コマンドを直接使用しており、非推奨の `wrangler pages publish` は使用していません
 
+#### `.github/workflows/update-data.yml`
+スケジュールまたは手動で国データを更新し、自動的にコミット・デプロイするワークフローです。
+
+```yaml
+name: Update Country Data
+
+on:
+  workflow_dispatch: # 手動実行を許可
+  schedule:
+    - cron: '0 0 * * 0' # 毎週日曜日の0時に実行（UTC）
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90 # データ生成に時間がかかるため90分のタイムアウトを設定
+    permissions:
+      contents: write
+      deployments: write
+    name: Generate and Deploy Updated Data
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate country data
+        run: npm run batch:create-data
+        timeout-minutes: 75 # データ生成に最大75分を許可
+
+      - name: Get current datetime
+        id: datetime
+        run: echo "datetime=$(TZ='Asia/Tokyo' date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          git add public/
+          if git diff --staged --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes to commit"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected"
+          fi
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git commit -m "update by gha on ${{ steps.datetime.outputs.datetime }}"
+          git push
+
+      - name: Build
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: npm run build
+
+      - name: Apply D1 Migrations
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: npx wrangler d1 migrations apply world-flags-learning-db --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: npx wrangler pages deploy dist --project-name=world-flags-learning
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+```
+
+**注**: 
+- データ生成は最大90分のタイムアウトが設定されています
+- 変更がない場合、コミット・ビルド・デプロイはスキップされます
+- コミットメッセージは日本時間（JST）の日時が自動的に追加されます
+- `workflow_dispatch` により、GitHubの Actions タブから手動実行が可能です
+
 ### 5. 動作確認
+
+#### 国データ更新ワークフローの手動実行
+
+1. GitHub リポジトリの **Actions** タブを開く
+2. 左側のワークフロー一覧から **Update Country Data** を選択
+3. **Run workflow** ボタンをクリック
+4. **Run workflow** を確認してクリック
+5. ワークフローの実行状況を確認
+   - データ生成には30分〜1時間程度かかる場合があります
+   - 実行ログで進捗を確認できます
+6. 完了後、`public/countries.ja.json` と `public/countries.en.json` が更新されます
+7. 変更がある場合、自動的にコミット・デプロイされます
 
 #### ステップ 1: プルリクエストの作成
 ```bash
